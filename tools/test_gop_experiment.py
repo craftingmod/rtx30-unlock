@@ -33,7 +33,17 @@ class GopPackage(unittest.TestCase):
             self.assertTrue((output / 'RTX30-GOP-TEST').is_dir())
             self.assertTrue((output / 'RTX30-GOP-TEST/README.txt').is_file())
             manifest = json.loads((output / 'build-manifest.json').read_text(encoding='utf-8-sig'))
-            self.assertIn(manifest.get('Mode', 'cycle'), ('cycle', 'tree-read-only', 'leaf-member', 'full-flr'))
+            self.assertIn(manifest.get('Mode', 'cycle'), ('cycle', 'tree-read-only', 'leaf-member', 'full-flr', 'full-unlock'))
+            if manifest.get('Mode') == 'full-unlock':
+                self.assertTrue((output / 'RTX3080-UNLOCK/ASSETS/README.txt').is_file())
+            if manifest.get('WindowsHandoff'):
+                for source, name in (('experiments/gop/windows-check.ps1', 'check.ps1'),
+                                     ('analysis/compute-benchmark.cu', 'compute-benchmark.cu'),
+                                     ('analysis/build-benchmark.cmd', 'build-benchmark.cmd'),
+                                     ('results/benchmark.json', 'historical-benchmark.json')):
+                    self.assertEqual((output / 'WINDOWS' / name).read_bytes(),
+                                     (ROOT / source).read_bytes())
+                self.assertFalse((output / 'WINDOWS/compute-benchmark.exe').exists())
             self.assertEqual((output / 'EFI/BOOT/BOOTX64.EFI').read_bytes(),
                              (ROOT / 'build/gop-experiment/BOOTX64.EFI').read_bytes())
             for source in ('experiments/gop/cycle.h', 'experiments/gop/cycle.c', 'experiments/gop/tree.c',
@@ -71,6 +81,25 @@ class GopPackage(unittest.TestCase):
 
     @unittest.skipUnless((ROOT / 'build/gop-experiment/build-manifest.json').exists(),
                          'Build GOP experiment first')
+    def test_invalid_assets_never_publish_package(self):
+        manifest = json.loads((ROOT / 'build/gop-experiment/build-manifest.json').read_text(encoding='utf-8-sig'))
+        if manifest.get('Mode') != 'full-unlock':
+            self.skipTest('Build full-unlock mode first')
+        for invalid in ('missing', 'wrong-size', 'wrong-hash'):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                assets = root / 'assets'
+                assets.mkdir()
+                first = json.loads((ROOT / 'unlock/assets.json').read_text())[0]
+                if invalid != 'missing':
+                    (assets / first['Name']).write_bytes(b'x' * (first['Bytes'] if invalid == 'wrong-hash' else 1))
+                with self.assertRaises((OSError, ValueError)):
+                    package(root / 'usb', assets=assets)
+                self.assertFalse((root / 'usb').exists())
+                self.assertFalse(list(root.glob('.gop-stage-*')))
+
+    @unittest.skipUnless((ROOT / 'build/gop-experiment/build-manifest.json').exists(),
+                         'Build GOP experiment first')
     def test_tampering_never_publishes_a_partial_package(self):
         for change in ('efi', 'source', 'escape', 'manifest'):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
@@ -91,7 +120,7 @@ class GopPackage(unittest.TestCase):
                         first['Path'] = '../outside.c'
                     else:
                         path = root / first['Path']
-                        path.parent.mkdir(parents=True)
+                        path.parent.mkdir(parents=True, exist_ok=True)
                         path.write_text('changed after build')
                 manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
                 output = root / 'usb'

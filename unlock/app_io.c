@@ -20,15 +20,21 @@ static const ASSET_SPEC Specs[]={
 };
 static VOID LogError(VOID){LogFault=TRUE;if(Gu.armed)Gu.fault=TRUE;}
 VOID GuConsole(const char *Text) {
+#ifdef GU_GOP_EXPERIMENT
+  (void)Text;LogError();
+#else
   if(!Table || !Table->ConOut || !Table->ConOut->OutputString){LogError();return;}
   while(*Text) {
     CHAR16 line[128];UINTN n=0;
     while(*Text && n<126){if(*Text=='\n')line[n++]='\r';line[n++]=(UINT8)*Text++;}
     line[n]=0;if(EFI_ERROR(Table->ConOut->OutputString(Table->ConOut,line))){LogError();return;}
   }
+#endif
 }
 VOID GuLogText(const char *Text) {
+#ifndef GU_GOP_EXPERIMENT
   GuConsole(Text);
+#endif
   if(!Report || LogFault){LogError();return;}
   UINTN expected=strlen(Text),written=expected;
   EFI_STATUS status=Report->Write(Report,&written,(VOID *)Text);

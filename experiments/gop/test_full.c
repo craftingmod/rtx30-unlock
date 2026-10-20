@@ -14,6 +14,9 @@ static BOOLEAN ResidualVirtual,HideVirtual,FailVirtualLog;static UINT32 VirtualO
 static char FullLog[65536];static size_t FullLogUsed;
 static unsigned FailStopRole,FailStartRole,FullStops,FullStarts,Flrs,QuietWaits,CloseCount,WriteCount;
 static UINT32 Config[64];static UINT16 Fpcie;
+#ifdef GC_PATCH_FIXTURE
+static BOOLEAN FailChildLog;
+#endif
 static EFI_HANDLE Original(EFI_HANDLE h){return NewHandles && (h==H(102) || h==H(103) || h==H(105))?H((UINTN)h-100):h;}
 static EFI_HANDLE Current(EFI_HANDLE h){return NewHandles && (h==PHYS || h==TEXT || h==EDID)?H((UINTN)h+100):h;}
 static unsigned Actor(EFI_HANDLE h){if(h==VENDOR)return 0;if(h==BRIDGE)return 1;if(h==H(15))return 2;if(h==MEMBER)return 3;assert(h==RUNTIME);return 4;}
@@ -138,6 +141,9 @@ static EFI_STATUS EFIAPI ExclusiveClose(EFI_HANDLE h,EFI_GUID *g,EFI_HANDLE agen
   if(FailClose)return EFI_DEVICE_ERROR;Exclusive=FALSE;return EFI_SUCCESS;
 }
 static BOOLEAN FLog(const char *format,...){
+#ifdef GC_PATCH_FIXTURE
+  if(FailChildLog && FullStarts && strstr(format,"CHILD_"))return FALSE;
+#endif
   va_list args;va_start(args,format);int n=vsnprintf(FullLog+FullLogUsed,sizeof(FullLog)-FullLogUsed,format,args);va_end(args);
   assert(n>=0 && (size_t)n<sizeof(FullLog)-FullLogUsed);FullLogUsed+=(size_t)n;
   return !(FailLogRun && FullStops) && !(FailIsolationLog && strstr(format,"FULL_OLD_INTERFACE")) && !(FailVirtualLog && strstr(format,"FULL_VIRTUAL_GOP"));
@@ -165,6 +171,7 @@ static VOID FReset(VOID){
   }
 }
 static VOID FPrepare(GF_PLAN *p){assert(GfPrepare(&Context,p)==EFI_SUCCESS && !Allocations && !FullStops);}
+#ifndef GC_PATCH_FIXTURE
 int main(void){
   GF_PLAN *p=malloc(sizeof(*p));assert(p);GC_RESULT r;
   FReset();FPrepare(p);assert(GfRun(&Context,p,&r)==EFI_SUCCESS && r.restored && Flrs==1 && QuietWaits==1 && CloseCount==1 && !Exclusive && !Allocations);
@@ -216,3 +223,4 @@ int main(void){
   assert(GfRun(&Context,p,&r)==EFI_DEVICE_ERROR && !Flrs);
   assert(!Allocations);free(p);puts("PASS 31 full GOP/FLR/rejoin scenarios; one reset, 100ms isolation and shared input guards");return 0;
 }
+#endif

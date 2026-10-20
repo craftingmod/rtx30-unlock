@@ -1,8 +1,21 @@
 #include "cycle.h"
 #if defined(GC_FULL_FLR)
 #include "full.h"
+#ifdef GC_FULL_UNLOCK
+#include "patch.h"
+#include "visual.h"
+#ifdef GC_WINDOWS_HANDOFF
+#include "windows.h"
+#define GC_DIAG "v14-windows-handoff"
+#define GC_DIAG_WIDE L"v14-windows-handoff"
+#else
+#define GC_DIAG "v13-mode-cycle-readback"
+#define GC_DIAG_WIDE L"v13-mode-cycle-readback"
+#endif
+#else
 #define GC_DIAG "v8-virtual-gop"
 #define GC_DIAG_WIDE L"v8-virtual-gop"
+#endif
 #elif defined(GC_LEAF_ONLY)
 #include "leaf.h"
 #define GC_DIAG "v5-leaf"
@@ -129,9 +142,19 @@ static EFI_STATUS Approve(VOID) {
   EFI_STATUS status=Table->ConIn->Reset(Table->ConIn,FALSE);if(EFI_ERROR(status))return status;
   status=Say(
 #ifdef GC_FULL_FLR
+#ifdef GC_FULL_UNLOCK
+    L"Release GPU GOP, run ONE real unlock including FLR, restore GOP and compare selectors.\r\n"
+    L"Then switch to a different resolution and back; draw green and read framebuffer.\r\n"
+#ifdef GC_WINDOWS_HANDOFF
+    L"On complete success, save reports and start Windows WITHOUT a reboot.\r\n"
+#else
+    L"Firmware assets are verified before U. Windows handoff is not part of this test.\r\n"
+#endif
+#else
     L"FULL GPU GOP release and ONE PCIe FLR, then display recovery.\r\n"
     L"EDID consumers are stopped per device; shared input is checked after every step.\r\n"
     L"No compute unlock is linked. FLR will reset the GPU and may blank the screen.\r\n"
+#endif
 #elif defined(GC_LEAF_ONLY)
     L"Detach/restore ONE text-output member. GPU GOP and EDID drivers stay bound.\r\n"
     L"The selected output driver will receive Stop, then Supported/Start for recovery.\r\n"
@@ -141,8 +164,18 @@ static EFI_STATUS Approve(VOID) {
 #ifndef GC_FULL_FLR
     L"No unlock, FLR or direct register writes are linked.\r\n"
 #endif
+#ifdef GC_WINDOWS_HANDOFF
+    L"Allow up to 10 minutes for Windows; power off if recovery stops or Windows hangs.\r\n"
+#elif defined(GC_FULL_UNLOCK)
+    L"Allow up to 10 minutes after U, including a black screen; then power off physically.\r\n"
+#else
     L"Screen may go black. If it does not return within 60 seconds, power off physically.\r\n"
+#endif
+#ifdef GC_WINDOWS_HANDOFF
+    L"In Windows, check NVIDIA status and compute. Do not run Unlock again in this boot.\r\n"
+#else
     L"After recovery, visually check the screen and power off; do not run Unlock in this boot.\r\n"
+#endif
     L"Press U once for one detach/reconnect; Esc or 30 seconds cancels.\r\n");
   if(EFI_ERROR(status))return status;
   for(UINTN i=0;i<300;i++) {
@@ -164,6 +197,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   if(!table || !table->BootServices || !table->RuntimeServices)return EFI_INVALID_PARAMETER;
   Table=table;Report=NULL;LogFailed=FALSE;
   GC_CONTEXT context={0};context.table=table;context.image=image;context.log=Log;
+#ifdef GC_WINDOWS_HANDOFF
+  GW_PLAN windows={0};
+#endif
 #ifndef GC_TREE_ONLY
 #ifdef GC_FULL_FLR
   GF_PLAN *approved=NULL;
@@ -183,7 +219,11 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
     "read-only ownership tree; no driver Start/Stop, exclusive access, unlock or FLR linked\n"
 #else
 #ifdef GC_FULL_FLR
+#ifdef GC_FULL_UNLOCK
+    "full GPU GOP release, real unlock with one FLR, PCI/GOP restore and selector comparison\n"
+#else
     "full GPU GOP release, one FLR, PCI/GOP restore; no compute unlock\n"
+#endif
 #elif defined(GC_LEAF_ONLY)
     "single text member Stop/Supported/Start; no GPU GOP release, exclusive access, unlock or FLR\n"
 #else
@@ -220,10 +260,30 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   stage="full-plan-allocation";status=table->BootServices->AllocatePool(EfiLoaderData,sizeof(*approved),(VOID **)&approved);
   if(EFI_ERROR(status) || !approved){status=EFI_OUT_OF_RESOURCES;goto finish;}
   stage="full-prepare";status=GfPrepare(&context,approved);if(EFI_ERROR(status))goto finish;
+#ifdef GC_FULL_UNLOCK
+  status=Say(L"Verifying captured board state and five firmware assets before U. Please wait.\r\n");
+  if(EFI_ERROR(status))goto finish;
+  stage="unlock-preflight";status=GxPrepare(&context);if(EFI_ERROR(status))goto finish;
+#endif
+#ifdef GC_WINDOWS_HANDOFF
+  stage="windows-preflight";status=GwPrepare(&context,&windows);if(status!=EFI_SUCCESS)goto finish;
+#endif
   stage="manual-approval";status=Approve();if(EFI_ERROR(status))goto finish;
-  if(!Log("MANUAL_U confirmed for full GOP release and one FLR\n")){status=EFI_DEVICE_ERROR;goto finish;}
+  if(!Log(
+#ifdef GC_FULL_UNLOCK
+    "MANUAL_U confirmed for full GOP release and real unlock including one FLR\n"
+#else
+    "MANUAL_U confirmed for full GOP release and one FLR\n"
+#endif
+    )){status=EFI_DEVICE_ERROR;goto finish;}
+#ifdef GC_FULL_UNLOCK
+  if(!GvMark(&context,"manual-u")){status=EFI_DEVICE_ERROR;goto finish;}
+#endif
   stage="full-stop-flr-restore";status=GfRun(&context,approved,&result);
   Log("FULL_FINAL status=%#llx touched=%u restored=%u\n",(unsigned long long)status,result.touched,result.restored);
+#ifdef GC_FULL_UNLOCK
+  if(result.touched && EFI_ERROR(status))goto stop;
+#endif
 #elif defined(GC_LEAF_ONLY)
   stage="leaf-prepare";status=GcLeafPrepare(&context,&approved);if(EFI_ERROR(status))goto finish;
   stage="manual-approval";status=Approve();if(EFI_ERROR(status))goto finish;
@@ -250,6 +310,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #endif
   if(result.touched && (!result.restored || LogFailed))goto stop;
   if(result.restored) {
+#ifdef GC_FULL_UNLOCK
+    if(!GvMark(&context,"console-output-begin"))goto stop;
+#endif
     EFI_STATUS output=Say(
 #ifdef GC_FULL_FLR
       L"GPU GOP restored after FLR. Saving PCI report; wait for REPORT SAVED.\r\n"
@@ -260,23 +323,57 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
       L"GOP/text protocols restored. Verify this screen visually.\r\n"
 #endif
 #ifdef GC_FULL_FLR
+#ifdef GC_FULL_UNLOCK
+      L"Check the GREEN square at bottom right. Wait for REPORT SAVED.\r\n");
+#else
       L"No compute unlock was attempted. Do not reset or remove the USB yet.\r\n");
+#endif
 #else
       L"No unlock or FLR was attempted. Power off before the next experiment.\r\n");
 #endif
     if(!Log("console_output_status=%#llx\n",(unsigned long long)output) || EFI_ERROR(output))goto stop;
+#ifdef GC_FULL_UNLOCK
+    if(!GvMark(&context,"console-output-end") || EFI_ERROR(GxObserve(&context,"after-output")))goto stop;
+#endif
     UINT32 cfg[64];EFI_STATUS read=context.pci->Pci.Read(context.pci,EfiPciIoWidthUint32,0,64,cfg);
     if(!Log("config_after_status=%#llx\n",(unsigned long long)read) || EFI_ERROR(read))goto stop;
     for(UINTN i=0;i<64;i++)if(!Log("config_after[%02x]=%08x\n",(unsigned)(i*4),cfg[i]))goto stop;
+#ifdef GC_FULL_UNLOCK
+    EFI_STATUS patch_closed=GxFinish();
+    if(!Log("PATCH_LOG_CLOSE status=%#llx\n",(unsigned long long)patch_closed) || EFI_ERROR(patch_closed))goto stop;
+    if(!GvMark(&context,"report-complete"))goto stop;
+#ifdef GC_WINDOWS_HANDOFF
+    if(!Log("END: patch and display verified; Windows handoff follows if report close succeeds\n"))goto stop;
+#else
+    if(!Log("END: selector comparison recorded; Windows/compute validation pending; power off\n"))goto stop;
+#endif
+#else
     if(!Log("END: protocol checks complete; visual confirmation pending; power off before any unlock\n"))goto stop;
+#endif
+#ifdef GC_WINDOWS_HANDOFF
+    if(EFI_ERROR(Say(L"REPORT SAVED. Starting Windows without reboot.\r\n")))goto stop;
+    status=GwStart(&context,&windows,&Report,status==EFI_SUCCESS && result.touched && result.restored && GxSafe() && !LogFailed);
+    if(Report)goto stop;
+    Say(L"Windows did not take control or returned. Status: ");
+    CHAR16 number[]=L"0x0000000000000000\r\n";static const CHAR16 digits[]=L"0123456789abcdef";
+    for(UINTN i=0;i<16;i++)number[2+i]=digits[((UINT64)status>>((15-i)*4))&15];
+    Say(number);Say(L"Power off physically; no retry.\r\n");
+    Halt();
+#else
     EFI_STATUS closed=Report->Close(Report);Report=NULL;
     if(EFI_ERROR(closed))Halt();
     Say(L"REPORT SAVED. Power off now before any further experiment.\r\n");
-    /* This experiment never automatically continues to Windows after touching GOP. */
     Halt();
+#endif
   }
 #endif
 finish:
+#ifdef GC_WINDOWS_HANDOFF
+  {EFI_STATUS unloaded=GwCancel(&context,&windows);if(EFI_ERROR(unloaded))status=unloaded;}
+#endif
+#ifdef GC_FULL_UNLOCK
+  {EFI_STATUS closed=GxFinish();if(EFI_ERROR(closed))status=closed;}
+#endif
   Log("CANCELLED_OR_REFUSED stage=%s status=%#llx touched=0\n",stage,(unsigned long long)status);
   if(LogFailed)status=EFI_DEVICE_ERROR;
   status=CloseFile(Report,status);Report=NULL;

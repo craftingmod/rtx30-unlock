@@ -1,6 +1,243 @@
 # NVIDIA GOP 해제·복구 실험 1
 
-## 다음 실험: diagnostic v8-virtual-gop
+## 현재 실험: diagnostic v14-windows-handoff
+
+### 최초 실기 결과: Windows 장치·드라이버 정상 수집, 연산은 미측정
+
+2026-10-21 사용자가 제공한 `V14RESULT`에서 언락·단일 FLR·DMA 정리, 자식 2개와 GOP 복구, mode 1(640×480) → 원래 mode 0 복귀가 모두 성공했다. 녹색 9,216픽셀의 직접 읽기는 불일치 0이며, 모든 관측 단계의 셀렉터는 `88888888 / 8`을 유지했다. `FULL_FINAL status=0 touched=1 restored=1`, `PATCH_LOG_CLOSE status=0`, `END`, `WINDOWS_START_INTENT ... reboot=0`까지 기록됐다. U(149000ms)부터 보고 완료(376000ms)까지 227초(3분 47초)다.
+
+Windows 수집 시각은 `2026-10-21T01:53:43+09:00`, Windows가 보고한 LastBootUpTime은 `2026-10-21T01:52:02.5000000+09:00`이다. NVIDIA 장치는 `Status=OK`, `ConfigManagerErrorCode=0`이며 `nvidia-smi`는 종료 코드 0, Display Attached=Yes, Display Active=Enabled, WDDM, 드라이버 616.56을 보고했다. 이 결과로 Windows에서 장치와 드라이버가 정상 응답한 것을 확인했다. UEFI 로그는 StartImage 직전까지이므로 중간 재부팅 부재를 독립적으로 증명하지는 않는다. 장시간 안정성·드라이버 재시작 여부도 이 한 번의 수집만으로 판정하지 않는다.
+
+Windows 제품명은 `NVIDIA GeForce RTX 3090 Ti`, 보고된 메모리는 24564MiB이다. PCI ID `2203:10DE`, Subsystem `2000:7377`, BDF `0000:01:00.0`는 UEFI 대상과 일치한다. 사용자는 v13과 **같은 카드·VBIOS**라고 확인했다. 이 제품명/메모리 보고만으로 카드 교체나 패치 성능 효과를 추론하지 않는다.
+
+`BenchmarkState=not-run`, BenchmarkExitCode/Sha256=null이며 벤치마크 JSON은 제공되지 않았다. 따라서 CUDA 실행 성공·결과 정확성·성능 향상·Windows 초기화 후 셀렉터 보존은 미검증이다. 이 결과를 수집할 당시 `analysis/compute-benchmark.cu`와 `windows-check.ps1`은 제품명을 RTX 3080으로 제한했다. 이후 제품명 제한을 제거하고 대상 PCI 위치 `0000:01:00.0`와 중복 대상 거부, 결과 검증은 유지했다. 실제 제품명은 JSON에 그대로 남긴다. 같은 벤치마크 실행 파일·드라이버·조건으로 패치 전후를 비교해야 한다. 이번 `not-run`이 이 제한 때문에 발생했다고 단정하지는 않는다.
+
+원본은 `captures/v14-windows-handoff-result/`에 전체 복사하고 모든 파일의 SHA256 일치를 확인했다. 사용자 제공 `V14RESULT/`는 수정하지 않았다.
+
+### 추가 실기 결과: 같은 Windows 부팅에서 CUDA 3종 실행 성공
+
+2026-10-21 02:02:22(+09:00) 업데이트된 수집 결과는 `BenchmarkState=passed`, BenchmarkExitCode=0, NvidiaSmiExitCode=0이며 두 오류 파일은 비어 있다. 실행 파일 SHA256 `5bc323311c1dd9d7302424cd8a098a84c813af17ac7a371246c112f5b2b76e76`는 배포한 제품명 제한 수정본과 일치한다. LastBootUpTime `2026-10-21T01:52:02.5000000+09:00`는 최초 수집과 같아 두 Windows 수집 사이 재부팅은 관측되지 않는다. NVIDIA 장치 상태도 OK/오류 코드 0이다.
+
+| 연산 | 중앙 시간(ms) | 측정 TFLOPS |
+|---|---:|---:|
+| FP32 pedantic | 4.640176 | 29.619 |
+| FP16 Tensor, FP32 누산 | 1.000960 | 137.307 |
+| BF16 Tensor, FP32 누산 | 1.000960 | 137.307 |
+
+각 연산은 4096×4096 GEMM, 2초 워밍업, 30회 표본이며 `reference_checked=true`다. 코드의 검사는 결과 행렬 첫/마지막 원소에 한정한다. 이로써 v14 이후 Windows에서 해당 CUDA 연산들이 정상 완료된 것을 확인했다. 이 시점에는 패치 성능 효과가 미확정이었으며, 이후 기준 비교는 아래에 기록했다. Windows 초기화 후 실제 셀렉터 값과 장시간 안정성은 별도 검증 대상이다.
+
+제품명은 RTX 3090 Ti, PCI 위치는 `0000:01:00.0`, compute capability는 8.6이다. 결과 JSON이 보고한 CUDA runtime/driver API 값은 13040/13040, cuBLAS는 130300이다. 빌드 도구/배포 파일 기록과 런타임 보고값을 구분해 그대로 보존한다. 과거 기준값은 다른 실행 파일·라이브러리·드라이버 조건이므로 이 수치를 단순 비율로 비교해 패치 향상률을 판정하지 않는다.
+
+다음 기준 측정은 완전 종료 뒤 USB 패치를 실행하지 않고 Windows로 부팅해 **동일 벤치마크 패키지와 동일 드라이버**에서 `run.cmd`를 실행한다. 새 결과는 예를 들어 `V14BASELINE`으로 따로 보존하고 PCI 식별자·실행 파일 해시·라이브러리 버전·드라이버를 비교한다. 현재 패치 후 결과는 `captures/v14-windows-benchmark-result/`에 전체 보존했고 사용자 원본과 모든 SHA256이 일치한다. 최초 UEFI/Windows 수집은 `captures/v14-windows-handoff-result/`에 별도로 유지한다.
+
+### 기준 측정과 비교: FP16/BF16 약 1.89배, FP32 차이 작음
+
+사용자가 패치 없는 기준 측정으로 제공한 `V14BaselineResult`와 패치 후 `V14RESULT`를 비교했다. 실행 파일 SHA256, GPU UUID·PCI 위치·Subsystem·VBIOS, NVIDIA 드라이버 616.56, CUDA runtime/driver API 13040/13040, cuBLAS 130300이 일치한다. 두 결과 모두 정상 종료·결과 검사를 통과했고 장치 오류는 없다. Windows LastBootUpTime은 기준 측정 02:05:14.500, 패치 후 측정 01:52:02.500(+09:00)으로 서로 다른 부팅이다.
+
+| 연산 | 기준 TFLOPS | 패치 후 TFLOPS | 처리량 배율 | 처리량 변화 |
+|---|---:|---:|---:|---:|
+| FP32 pedantic | 29.369 | 29.619 | 1.009× | +0.85% |
+| FP16 Tensor, FP32 누산 | 72.672 | 137.307 | 1.889× | +88.94% |
+| BF16 Tensor, FP32 누산 | 72.754 | 137.307 | 1.887× | +88.73% |
+
+Tensor 연산 중앙 실행 시간은 FP16 1.891216→1.000960ms, BF16 1.889088→1.000960ms로 약 47% 줄었다. 따라서 이 1회 비교에서는 패치 후 FP16/BF16 Tensor 처리량이 약 1.89배였고 FP32 변화는 작았다. 이는 같은 도구·드라이버 조건에서 관측한 연산 효과이며 모든 작업이나 반복 부팅에서 같은 향상을 보장하지 않는다. 각 상태당 프로세스 실행 1회(내부 표본 30회)이고, 결과 검사는 첫/마지막 행렬 원소에 한정한다. 수집 스크립트는 벤치마크 전에 nvidia-smi를 실행하므로 두 스냅샷의 온도 42°C만으로 측정 중 클록·전력·부하까지 같았다고 판단하지 않는다. Windows 셀렉터 값이나 기준 측정의 cold-state는 직접 수집하지 않았다.
+
+기준 측정 원본은 `captures/v14-baseline-result/`에 복사하고 해시 일치를 확인했다. 계산값·비교 조건·입력 SHA256은 `results/v14-comparison.json`에 기록했다. 사용자 제공 두 결과 폴더는 수정하지 않았다. 다음 남은 검증은 완전 종료 후 패치 전후 반복 측정 및 실제 사용하는 작업의 안정성이다.
+
+### 제품명 제한 수정 후 연산 검사
+
+별도 `build/windows-benchmark-namefix.zip`에는 수정한 벤치마크 EXE, `check.ps1`, 실행용 `run.cmd`, CUDA 13.2의 cuBLAS/cuBLASLt DLL과 라이선스, 소스와 파일별 SHA256을 포함한다. v14 EFI를 교체할 필요 없이, v14로 진입한 Windows의 같은 부팅에서 압축을 풀고 `run.cmd`를 실행한다. 새 `RESULTS-*` 폴더 전체를 회수한다. 위 추가 실기에서 3종 CUDA 연산의 정상 완료를 확인했다.
+
+이 EXE는 CUDA 13.2로 새로 빌드했으므로 과거 CUDA 12.6 실행 파일과 해시·라이브러리가 다르다. 이번 실행의 정상 동작 여부를 먼저 확인하고, 성능 효과 판정은 새 패키지의 동일 실행 파일·DLL·드라이버 조건으로 패치 전후를 다시 측정한다. 기존 v14 USB ZIP의 실행 파일 없는 WINDOWS 폴더와 별도로 배포한다.
+
+### 실험 동작 및 실행 방법
+
+v13에서 성공한 실제 언락·단일 FLR·GOP 복구·다른 해상도 왕복·녹색 프레임버퍼 읽기를 유지한 뒤, **재부팅 없이 Windows Boot Manager를 실행**한다. SSD EFI 파일이나 BootOrder/BootNext 등 NVRAM 변수는 쓰지 않는다. `-WindowsHandoff`를 지정한 별도 빌드이며, 이 옵션 없이 `-FullUnlock`을 빌드하면 v13의 물리 종료 동작을 유지한다. v14의 Windows 장치·드라이버 정상 응답은 위 실기 결과에서 확인했으며, 연산 성능은 아직 미측정이다.
+
+U 전에 최대 128개 파일 시스템을 조회하고, USB 경로를 제외한 단일 인스턴스 디스크 경로에서 `\EFI\Microsoft\Boot\bootmgfw.efi`를 읽기 전용으로 찾는다. 정상 파일이 정확히 하나여야 하며, 없거나 중복되거나 조회가 실패하면 패치를 시작하지 않는다. 해당 전체 Device Path로 `LoadImage`를 수행하고 로드된 이미지의 장치·응용 프로그램 메모리 유형을 검증한다. Windows는 이때 실행하지 않는다. U 취소/실패 시 미리 로드한 이미지를 해제한다. 부팅 항목의 선택 옵션을 복제하지 않는 직접 파일 체인로드이므로 특수한 BCD/멀티부팅 구성은 별도 검증이 필요하다.
+
+패치·DMA 정리·영상 복구·모드 왕복·색상 읽기·셀렉터·콘솔·로그 검사가 모두 성공하고, 언락 로그가 닫히고 안전 상태가 확인돼야 실행한다. `WINDOWS_START_INTENT`를 Flush한 다음 GOP 로그의 Close가 성공한 경우에만 `StartImage`를 한 번 호출한다. 실패하면 정지하며 재시도·재부팅·다른 부팅 후보로의 자동 전환을 하지 않는다. StartImage가 반환하면 성공 상태라도 정지하고 화면에 상태 코드를 표시한다. 이때 로그는 이미 닫혔으므로 반환 상태는 USB에 추가 저장하지 않는다. `WINDOWS_START_INTENT`는 실행 직전 경계이며 Windows 부팅 성공의 증거는 아니다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1 -FullUnlock -WindowsHandoff -Profile profiles/board-refresh-run01.json
+experiments\gop\test.cmd
+experiments\gop\test-patch-state.cmd
+experiments\gop\test-visual.cmd
+experiments\gop\test-windows.cmd
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File experiments/gop/test-windows-check.ps1
+python tools/package_gop_experiment.py --output build/gop-experiment-usb-v14-windows-handoff --zip build/gop-experiment-usb-v14-windows-handoff.zip --assets assets
+```
+
+1. ZIP을 USB 루트에 풀고 기존 RUN은 보존한다. SSD EFI에는 설치하지 않는다.
+2. 완전 종료 후 USB로 부팅해 **v14-windows-handoff**를 확인하고 U를 한 번 누른다. 초기값 `20700011 / 6` 검사는 유지한다.
+3. 녹색 표시 및 보고 저장 뒤 Windows 진입을 기다린다. Windows가 실행되면 재부팅·드라이버 설치/교체 없이 아래 결과 수집을 먼저 한다. 10분간 Windows 진입이 없거나 STOP/반환 오류가 표시되면 상태를 기록한 뒤 물리 종료한다.
+4. Windows에서 USB의 드라이브 문자로 이동하고 다음 명령을 실행한다. 관리자 권한은 필요하지 않으며, 장치 정보와 `nvidia-smi -q`를 USB의 새 `WINDOWS/RESULTS-*`에 저장한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\WINDOWS\check.ps1
+# 이전 측정에 사용한 동일 실행 파일이 있으면 경로를 지정해 CUDA 측정도 수행:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\WINDOWS\check.ps1 -Benchmark 'C:\path\compute-benchmark.exe'
+```
+
+CUDA 실행 파일은 포함하지 않는다. `WINDOWS`에 기존 벤치마크 소스·빌드 명령·과거 측정 JSON을 함께 제공한다. 소스 빌드 스크립트는 설치된 Visual Studio C++ 도구를 vswhere로 찾고 CUDA_PATH 또는 PATH의 nvcc를 사용한다. 비교 시 동일 실행 파일 해시·드라이버·부하 조건을 맞춘다. 기존 검증은 행렬 결과의 첫/마지막 원소를 확인하며 전체 원소 검사는 아니다. 스크립트의 `BenchmarkState=passed`는 해당 프로그램의 종료 코드와 기본 출력 검사를 통과했다는 뜻으로, 성능 향상이나 Windows에서 셀렉터 보존을 직접 증명하지 않는다. 실행 파일을 지정하지 않으면 `not-run`이다. 과거 측정값은 이 v14 실행의 결과가 아니다.
+
+회수 자료는 두 UEFI REPORT(`RTX30-GOP-TEST/RUNxx`, `RTX3080-UNLOCK/RUNxx`)와 새 `WINDOWS/RESULTS-*` 전체다. 녹색 표시, Windows 바탕화면 진입, NVIDIA 장치 오류(특히 오류 코드 43), 화면 꺼짐/드라이버 재시작 여부도 기록한다. 벤치마크 성능과 같은 부팅에서의 정상 실행 여부를 확인하기 전까지 패치의 Windows 적용 성공으로 판정하지 않는다.
+
+## 이전 실험: diagnostic v13-mode-cycle-readback
+
+### 실기 결과: 모드 왕복·색상 읽기·실제 영상 복구 성공
+
+2026-10-21 제공된 v13 로그와 사용자의 오른쪽 아래 녹색 사각형 표시 확인으로, 이 보드의 이번 실행에서 실제 영상 출력 복구에 성공했다. 초기 셀렉터 `20700011 / 6`, PROM·자산 검증을 통과했고, `PATCH_TRANSACTION result=0 containment=0 started=1 quiesced=1 fault=0 retained=0 maps=0 FLR=1 safe=1`로 실제 언락·단일 FLR·DMA 정리를 완료했다. post-start 자식 2개와 물리 GOP 복구도 확인됐다.
+
+`VISUAL_MODE_CYCLE original=0 current=0 alternate=1 found=1`에 이어 mode 1(640×480) → 원래 mode 0 전환이 모두 `status=0`이었다. 원래 모드의 오른쪽 아래 (3744,2064)에 96×96 녹색 표시를 수행했고, `VISUAL_READBACK_RESULT pixels=9216 mismatches=0 matched=1`로 전 픽셀 읽기가 일치했다. `before-gop`, `after-gop`, `after-alternate-mode`, `after-set-mode`, `after-blt`, `after-readback`, `after-output` 모두 `SS0=88888888 SS1=00000008 matched=1`이다.
+
+`FULL_FINAL status=0 touched=1 restored=1`, `console_output_status=0`, `PATCH_LOG_CLOSE status=0`과 마지막 `END`까지 기록됐다. RTC 경과 시간에서 U는 126000ms, 보고 완료는 274000ms이므로 U 이후 완료까지 **148초(2분 28초)**다. 사용자는 실제 녹색 사각형을 확인했으며, 완료 문구를 봤는지는 별도로 보고하지 않았다.
+
+v12는 동일 모드 설정 후 신호 없음이었고, v13은 다른 해상도 왕복 후 실제 영상을 복구했다. 이는 이 환경에서 모드 왕복의 효과를 뒷받침하지만, 펌웨어의 동일 모드 초기화 생략 여부나 정확한 복구 기전은 아직 확정할 수 없다. 한 번의 실기 성공이며 반복 재현성·Windows 인계·연산 성능은 미검증이다. 원본은 `captures/v13-mode-cycle-readback-result/GOP.TXT`, `UNLOCK.TXT`에 보존했다.
+
+### 실험 동작 및 실행 방법
+
+v12의 해제·언락·단일 FLR·DMA 정리·자식 진단·복구를 유지하고 표시 검사만 바꾼다. 복구된 물리 GOP에서 원래 모드의 QueryMode 정보가 캡처와 같은지 확인한 뒤 최대 128개 지원 모드 중 원래/현재 모드 번호와 다르고 해상도도 원래와 다른 첫 RGB/BGR 모드를 선택한다. 후보의 모드 번호·해상도·조회 상태를 기록하며, 다른 해상도가 없거나 조회가 실패하면 SetMode 없이 STOP한다.
+
+선택한 다른 모드 → 원래 모드 순서로 SetMode를 각각 한 번 호출한다. 매번 모드 정보·프레임버퍼 범위와 `PATCH_STATE`를 검증한다(`after-alternate-mode`, `after-set-mode`). 전환 실패나 셀렉터 불일치 뒤에는 추가 전환을 하지 않으므로 다른 모드에서 중단될 수 있다. 재시도나 추가 FLR은 없다.
+
+원래 모드로 복귀하면 오른쪽 아래 최대 96×96 녹색 사각형을 Blt(VideoFill)로 그리고, `after-blt` 검사 후 **프레임버퍼 주소를 volatile 32비트 읽기로 직접 조회**한다. 사각형 전체 픽셀을 `0x0000ff00`과 비교하며 예약된 상위 8비트는 무시한다. `VISUAL_READBACK_RESULT`에 픽셀 수·불일치 수·첫 불일치 값을 남기고 `after-readback` 셀렉터를 검사한다. 읽기 직전 모드·주소 범위·픽셀 형식을 다시 검증한다. 불일치는 실패로 처리한다. 메모리 읽기 일치는 스캔아웃이나 모니터 링크 복구의 증거가 아니며, 실제 신호 여부는 별도로 관찰해야 한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1 -FullUnlock -Profile profiles/board-refresh-run01.json
+experiments\gop\test.cmd
+experiments\gop\test-patch-state.cmd
+experiments\gop\test-visual.cmd
+python tools/package_gop_experiment.py --output build/gop-experiment-usb-v13-mode-cycle-readback --zip build/gop-experiment-usb-v13-mode-cycle-readback.zip --assets assets
+```
+
+자산 포함 ZIP을 USB 루트에 풀어 EFI를 교체하고 기존 RUN은 보존한다. 완전 종료 후 부팅해 **v13-mode-cycle-readback** 확인 → U 한 번 → 최대 10분 대기 → 물리 종료한다. 화면이 돌아오지 않아도 같은 시간 뒤 물리 종료하고 두 폴더(`RTX30-GOP-TEST/RUNxx`, `RTX3080-UNLOCK/RUNxx`)의 새 REPORT 전체를 회수한다. 실제 모니터의 신호 없음/영상 표시 여부와 녹색 사각형·완료 문구 표시 여부도 함께 기록한다. v13은 위 실기 1회에서 영상 복구 성공을 확인했다. 반복 재현성과 Windows 인계·연산 성능은 별도 검증 대상이다. 초기값 `20700011 / 6` 검사는 유지한다.
+
+주요 판독값은 `VISUAL_MODE_CYCLE found=1`, 두 `VISUAL_SET_MODE_RESULT status=0`, `VISUAL_READBACK_RESULT matched=1 mismatches=0`, 각 단계 `PATCH_STATE matched=1`, 마지막 `END`다. 이 값이 모두 성공인데도 모니터가 신호 없음이면 다른 해상도 왕복과 메모리 색상 확인으로도 영상이 복구되지 않은 결과다. 출력 엔진/모니터 링크의 구체적인 원인은 여전히 확정할 수 없다.
+
+## 이전 실험: diagnostic v12-child-inspect
+
+### 전원 버튼 종료 후 재실행: 모든 API·셀렉터 검사 완료, 실제 영상은 신호 없음
+
+사용자는 전원 버튼으로 종료 후 다시 켰다고 확인했다(PSU/전원선 차단 확인은 아님). 새 v12 실행은 초기 상태 검사를 통과했고, post-start 양쪽 루트 API가 성공해 자식 2개를 관측했다. 한 자식에는 GOP/EDID/path가, 다른 자식에는 EDID/path가 있고 GOP는 EFI_UNSUPPORTED였다. 기존 자식 검사가 통과했고 역할별 복구도 모두 성공했다. 따라서 이번 실행에서는 v11의 자식 열거 오류가 재현되지 않았다. 추가 진단의 대기 시간 또는 전원 상태가 원인이었다고 확정할 수는 없다.
+
+`VISUAL_QUERY original_match=1`, `VISUAL_SET_MODE_RESULT status=0`(원래 mode=0), `VISUAL_BLT_RESULT status=0`, `console_output_status=0`, `FULL_FINAL status=0 touched=1 restored=1`, `PATCH_LOG_CLOSE status=0`과 마지막 END가 모두 기록됐다. 셀렉터는 before-gop/after-gop/after-set-mode/after-blt/after-output 모두 `88888888 / 8`을 유지했다. 하지만 사용자는 실제 모니터가 **신호 없음** 상태였다고 확인했다. 이는 단순히 완료 문구를 못 본 관측보다 명확한 영상 미복귀이며, API 성공이나 메모리 주소가 화면에 영상이 전달됐음을 증명하지 않는다.
+
+같은 모드의 SetMode 1회로는 이 실행에서 영상을 복구하지 못했다. 다음에는 현재와 다른 지원 모드로 전환했다 원래 모드로 복귀하는 동작, 실제 프레임버퍼 읽기 확인 및 출력 엔진/모니터 링크 쪽을 구분할 자료가 필요하다. 같은 모드 설정이 펌웨어에서 재초기화를 생략했는지는 가설이다. 새 실험 전 구체적인 지원 모드와 각 단계 셀렉터 검사를 준비해야 하며 Windows 인계·연산 성능은 여전히 미검증이다. 로그 원본은 `captures/v12-child-inspect-reboot-result/GOP.TXT`, `UNLOCK.TXT`에 보존했다.
+
+### 첫 실기 피드백: 초기 셀렉터 0/0으로 U 전에 거부
+
+v12의 prepare 진단은 `unique=2`, `FULL_CHILDREN_RESULT phase=prepare status=0`으로 통과했다. 물리 자식의 GOP/EDID/path와 EDID 전용 자식의 EDID/path가 조회됐으며 알려진 두 자식 구조였다. 이후 언락 cold-state 검사에서 `SS0=0 SS1=0`이 관측돼 `PATCH_PREFLIGHT status=0x8000000000000006`, `CANCELLED_OR_REFUSED stage=unlock-preflight ... touched=0`으로 종료했다. 빌드 기대값은 새 Probe에서 확인한 `20700011 / 6`이다. 이번 실행은 U 승인, 자산 읽기, Stop, 언락, FLR 및 post-start 진단에 도달하지 않았다.
+
+이 결과는 자식 진단의 실패나 post-start 오류 재현을 뜻하지 않는다. 0/0으로 바뀐 이유와 전원 상태의 영향은 미확정이다. 먼저 이전 실행의 종료 방식(RESET/전원 종료)을 확인하고, 전원을 완전히 차단했다 다시 켠 상태에서 읽기 전용 Probe REPORT/PROM을 재수집해 초기값을 비교해야 한다. 이번 0/0만 근거로 초기값 검사를 제거하거나 프로필을 0/0으로 바꾸지 않는다. 원본은 로컬 `captures/v12-child-inspect-result/GOP.TXT`, `UNLOCK.TXT`에 보존했다.
+
+v11이 NVIDIA 역할 0 Start 직후 자식 열거 단계에서 EFI_UNSUPPORTED로 중단된 원인을 구분한다. v12는 같은 해제·실제 언락·FLR 한 번·복구 순서를 유지하면서 **prepare와 post-start**에 루트 PCI I/O 및 Device Path의 open 관계를 수집하고, 발견한 자식의 GOP·EDID Discovered·Device Path 인터페이스 조회 상태를 기록한다. 인터페이스 내부나 장치 경로 바이트는 역참조하지 않는다. 역할 0 이후 진단은 `TIME phase=post-start-inspect-begin/end`로 측정한다.
+
+- `CHILD_ROOT_INTENT/RESULT`: 어느 루트 프로토콜의 OpenProtocolInformation이 호출됐고 어떤 상태·항목 수를 반환했는지.
+- `CHILD_OPEN`: 모든 항목의 agent, child, attributes, OpenCount와 expected_agent/child_edge/usable/duplicate 플래그. usable은 조회 가능한 비NULL·비루트 자식 핸들이라는 의미이며 실행 승인이 아니다.
+- `CHILD_PROTOCOL_INTENT/RESULT`: 자식별 gop/edid/path 조회 상태와 포인터. 인터페이스 부재도 그대로 기록하며 수집 오류로 숨기지 않는다.
+- `CHILD_INSPECT_END ... unique=N`: 두 프로토콜에서 중복을 제거한 관측 자식 수. 프로토콜당 128개 open, 전체 16개 자식을 넘으면 진단을 중단한다.
+- `FULL_CHILDREN_RESULT phase=post-start`: 기존 두 자식 검사의 실제 결과와 선택된 a/b 핸들. 진단 이후 원래 검사가 새로 열거하므로 두 기록은 동결된 하나의 스냅샷이 아니다.
+- `FULL_CHILD_GOP candidate=0/1`: 기존 물리 GOP 선택 단계의 조회 결과. 두 후보 모두 GOP가 없으면 기존대로 EFI_NOT_FOUND로 중단한다.
+
+관측된 자식을 자동 승인하거나 재연결하지 않으며 기존 소유자·정확한 두 자식 조건은 유지한다. 루트 열거 오류·범위 초과·진단 로그 실패 시 추가 복구를 진행하지 않는다. 정상 검사가 통과하면 기존 v11의 SetMode 1회·녹색 표시와 단계별 셀렉터 검사로 이어진다. 실패 시 추가 FLR, 재시도, 범용 ConnectController 또는 Windows 인계는 하지 않는다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1 -FullUnlock -Profile profiles/board-refresh-run01.json
+experiments\gop\test.cmd
+python tools/package_gop_experiment.py --output build/gop-experiment-usb-v12-child-inspect --zip build/gop-experiment-usb-v12-child-inspect.zip --assets B:\firmware
+```
+
+자산이 포함된 ZIP 내용물을 USB 루트에 복사해 EFI도 교체하고 기존 RUN은 보존한다. 완전 종료 후 부팅해 **v12-child-inspect** 확인 → U 한 번 → 최대 10분 기다린다. REPORT SAVED 후 물리 종료하고, 10분간 완료 안내가 없거나 화면이 검어도 물리 종료한다. 두 폴더의 새 REPORT 전체와 녹색 사각형·완료 문구의 실제 표시 여부를 전달한다. v12의 실기 결과는 위 기록과 같다. 이 명령은 이전 빌드용 기록이다.
+
+## 이전 실험: diagnostic v11-mode-recovery
+
+### 실기 피드백: NVIDIA Start 뒤 자식 열거 단계에서 중단
+
+사용자 제공 v11 로그는 언락·FLR 1회·DMA 정리와 `before-gop SS0=88888888 SS1=00000008 matched=1`까지 통과했다. NVIDIA 역할 0의 `FULL_START_RESULT status=0 shared_guard=0` 직후 `FULL_FINAL status=0x8000000000000003 touched=1 restored=0`과 STOP이 기록됐다. 현재 코드에서 이 사이 EFI_UNSUPPORTED를 그대로 반환하는 구간은 PCI I/O/Device Path의 두 자식 관계를 확인하는 `Children()`이다. 그 뒤 물리 GOP 조회 실패는 EFI_NOT_FOUND로 변환되므로 이번 오류와 구분된다. 자식 수·각 프로토콜 조회 결과가 기록되지 않아 자식 부족/초과 또는 열거 API 오류 중 어느 조건인지는 미확정이다.
+
+`after-gop`, `VISUAL_QUERY`, `VISUAL_SET_MODE_INTENT`, `VISUAL_BLT_INTENT`가 없으므로 SetMode와 녹색 표시 코드는 실행되지 않았다. 이번 결과로 명시적 SetMode의 효과를 평가할 수 없다. 더 기다려도 이 실행은 STOP에서 복구를 재시도하지 않는다. 수집 원본은 로컬 `captures/v11-mode-recovery-result/GOP.TXT`, `UNLOCK.TXT`에 보존했다.
+
+유효한 RTC 기록은 자산 읽기 102초(U 전), 해제/격리 11초, DMA 준비 3초, firmware 구간 32초, 전체 transaction 63초, DMA 정리 5초를 보여준다. 구간은 서로 포함될 수 있고 USB 로그 비용도 포함한다. U→FLR 시작은 88초, U→GOP 복구 시작은 101초다. FLR 시작/종료는 같은 RTC 초에 기록됐으며 0ms는 실제 무대기를 뜻하지 않는다. 다음 진단은 역할 0 Start 직후의 두 루트 프로토콜별 모든 자식 관계와 각 자식의 GOP/EDID/Device Path 조회 상태를 기록해 실패 조건을 구분해야 한다.
+
+v10에서 GOP 재초기화 후 셀렉터 보존은 통과했지만 실제 화면이 돌아오지 않았다. v11은 같은 실제 언락과 FLR 한 번을 수행한 뒤, 복구된 **새 물리 GOP**에서 원래 모드 번호의 QueryMode 정보가 원래 캡처와 같은지 확인하고 **SetMode를 한 번만 호출**한다. 성공 후 오른쪽 아래에 최대 96×96 녹색 사각형을 Blt(VideoFill)로 한 번 그리고 콘솔 안내를 출력한다. 같은 모드를 설정했을 때 펌웨어가 실제 출력 엔진을 재설정할지는 미검증이다. 다른 모드 전환이나 추가 FLR은 하지 않는다.
+
+`PATCH_STATE`의 `before-gop`, `after-gop`, `after-set-mode`, `after-blt`, `after-output`을 기록한다. SetMode/Blt 실패나 셀렉터 불일치, 로그 실패 시 추가 표시 작업을 하지 않고 STOP한다. 실패한 SetMode/Blt 뒤에도 가능한 셀렉터 조회는 한 번 기록하며, 원래 API 오류를 성공으로 바꾸지 않는다. QueryMode 정보, 모드/프레임버퍼와 공유 콘솔 보호 검사는 유지한다.
+
+시간은 UEFI Runtime GetTime의 RTC를 사용한다. U 전 사용 가능 여부를 검사하며, `TIME phase=... elapsed_ms=... since_last_ms=... clock_valid=1`이 자산 읽기, U, GOP 해제, transaction, DMA, firmware, FLR, DMA 정리, GOP 복구, SetMode, Blt, 콘솔 및 보고 저장 단계를 구분한다. ms는 출력 단위이며 실제 해상도는 펌웨어 시계에 따라 초 단위일 수 있다. 구간에는 USB 로그 Write/Flush 시간도 포함된다. 시계 오류나 역행 후 `clock_valid=0`은 경과 시간으로 해석하지 않는다. 시계 오류 자체로 진행 중인 하드웨어 복구를 중단하지는 않지만 로그 저장 실패는 계속 실패 처리한다. v10의 매 호출 `FULL_TRACE`는 제거하고 기존 중요 기록의 Flush는 유지했다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1 -FullUnlock -Profile profiles/board-refresh-run01.json
+experiments\gop\test.cmd
+experiments\gop\test-patch-state.cmd
+experiments\gop\test-visual.cmd
+python tools/package_gop_experiment.py --output build/gop-experiment-usb-v11-mode-recovery --zip build/gop-experiment-usb-v11-mode-recovery.zip --assets B:\firmware
+```
+
+ZIP 내용물을 FAT32 USB 루트에 복사해 EFI도 교체한다. 기존 RUN은 보존한다. 완전 종료 후 부팅해 화면과 ENTRY의 **v11-mode-recovery**를 확인하고 U를 한 번 누른다. **U 이후 최대 10분**까지 기다린다. 녹색 사각형과 완료 안내가 실제 표시되는지 확인하고 REPORT SAVED 후 물리 전원으로 종료한다. 10분까지 완료 안내가 없거나 화면이 검어도 물리 전원으로 종료하며 Windows로 진행하지 않는다. 이는 사용자 대기 한도이며 멈춘 펌웨어를 자동 중단하는 타이머는 아니다.
+
+두 폴더의 새 REPORT 전체와 함께 U→화면 소실 시간, 소실→복귀 시간, 녹색 사각형/문구/REPORT SAVED 표시 여부를 전달한다. 모든 API 성공과 셀렉터 유지도 실제 영상 복구의 증거를 대신하지 않는다. v11은 실기 미검증이다.
+
+## 이전 실험: diagnostic v10-isolation-trace
+
+### 실기 결과: 셀렉터 보존 통과, 실제 화면 미복귀
+
+사용자 제공 v10 로그는 `PATCH_TRANSACTION result=0 containment=0 started=1 quiesced=1 fault=0 retained=0 maps=0 FLR=1 safe=1`, `FULL_PATCH_CHECK_END call=2 status=0`, `FULL_FINAL status=0 touched=1 restored=1`과 마지막 `END`까지 완료됐다. GOP 복구 전후 모두 `SS0=88888888 SS1=00000008 ... read_ok=1 matched=1`이며, 실제 언락·단일 FLR·DMA 정리 후에도 GOP 재초기화가 이 두 셀렉터 값을 지우지 않았음을 이 보드에서 확인했다. 실제 연산 성능과 Windows 드라이버 인계는 여전히 미검증이다.
+
+모든 역할의 Start와 공유 보호 검사, `console_output_status=0`, `PATCH_LOG_CLOSE status=0`이 기록됐지만 사용자는 약 5분 뒤 화면이 꺼지고 이후 1분간 복귀하지 않아 RESET했다고 보고했다. 따라서 `restored=1`은 UEFI 객체·관계 복구 판정이며 실제 영상·링크 복구 성공을 의미하지 않는다. PCI 전후 64개 항목 중 차이는 `0x80: 00092930 → 00002930` 하나이며 BAR와 Command `0x3`은 일치한다. PLM 관측값 `ffffffff`도 복구 전후 동일하게 기록됐으며 이 값의 의미나 영상 소실과의 인과관계는 이번 기록으로 확정하지 않는다.
+
+v10에는 실제 경과 시간 계측이 없어 약 5분을 자산 읽기·DMA 매핑·펌웨어·로그 Flush·드라이버 호출별로 나눌 수 없다. 매 줄 USB Flush와 2만 개 이상의 DMA 매핑이 지연 후보지만 원인은 미확정이다. 이전의 60초 무응답만으로 영구 정지를 판정할 수 없으며, 위 v9 로그의 중단도 확정된 UEFI 호출 정지로 분류하지 않는다. 아래의 60초 안내는 이 실기에서 관측한 전체 지연을 포괄하지 못한다. 다음 진단은 구간별 경과 시간과 실제 영상 복구를 대상으로 삼아야 한다.
+
+수집 원본은 로컬 `captures/v10-isolation-trace-result/GOP.TXT`, `UNLOCK.TXT`에 보존했다.
+
+v9 실기에서는 GOP 완전 해제, PROM·자산 검사, FWSEC 실행과 `SS0=88888888`, `SS1=8`의 FLR 전 readback까지 확인됐다. 사용자는 U 뒤 60초 이상 대기했고 화면 변화 없이 물리 종료했다. `PCIe FLR begin`은 없고, GOP 로그는 두 번째 격리 검사에서 물리 GOP의 소멸 확인 직후 끝난다. 이 기록만으로 특정 UEFI 호출의 정지와 로그 저장 지연을 확정적으로 구별하지는 못한다. FLR·GOP 복구·복구 후 패치 보존은 미확인이다.
+
+v10은 이 두 번째 검사에 `FULL_TRACE`를 추가한다. 기존 핸들의 HandleProtocol, 가상 GOP의 GOP/경로 조회, ProtocolsPerHandle, OpenProtocolInformation, FreePool, Mode/프레임버퍼 읽기와 공유 콘솔 검사 전후를 USB에 Flush한다. `FULL_PATCH_CHECK_BEGIN/END call=2`가 검사 전체를 감싼다. 마지막 enter와 대응하는 return의 유무로 중단 구간을 좁힌다. 검사 조건, 실제 언락과 FLR 순서는 유지하며 진단 로그가 실패해도 FLR로 진행하지 않는다. 추가 Flush는 실행 시간을 늘릴 수 있으며, 마지막 enter만 있다는 사실이 그 API 자체의 결함을 증명하지는 않는다.
+
+현재 보드의 새 Probe RUN01과 PROM은 동일한 PROM 해시, `SS0=20700011`을 확인했다. 원래 `20740011`과 다른 이유는 미확인이다. 현재 빌드는 이 캡처에서 생성한 `profiles/board-refresh-run01.json`을 사용한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1 -FullUnlock -Profile profiles/board-refresh-run01.json
+experiments\gop\test.cmd
+python tools/package_gop_experiment.py --output build/gop-experiment-usb-v10-isolation-trace --zip build/gop-experiment-usb-v10-isolation-trace.zip --assets B:\firmware
+```
+
+아래 v9와 같은 USB 배치 및 실행 절차를 사용하되 화면과 ENTRY에서 **v10-isolation-trace**를 확인한다. U 후 화면 변화가 없어도 60초까지 기다리고, REPORT SAVED가 없으면 물리 전원을 종료한다. 두 새 RUN의 REPORT 전체를 가져온다. 자산은 포함된 ZIP을 그대로 사용한다. 이번 빌드도 실제 언락을 실행하며 Windows로 계속 부팅하지 않는다.
+
+## 이전 실험: diagnostic v9-unlock-rejoin
+
+사용자가 보고한 v8 실기 결과는 `FULL_ISOLATION_RESULT status=0 interfaces=0`, `FULL_FLR_PCI_RESTORED command=0x3 BARs=matched BME=0`, `FULL_FLR_RESULT attempted=1 status=0`, `FULL_FINAL status=0 touched=1 restored=1`, `console_output_status=0`이며 약 5초 뒤 화면이 복귀했다. PCI `0x80`의 상위 상태 필드만 지워지고 하위 제어값 `2930`과 BAR/Command가 유지됐다. 이는 이 보드에서 해제·FLR·화면 복구가 성공했다는 사용자 관측이며, 언락 보존 결과는 아니다.
+
+v9는 같은 완전 해제 경로에서 **기존 실제 언락 코어 → 코어 자체의 FLR 한 번과 PCI/DMA 정리 → NVIDIA GOP 및 콘솔 재초기화 → 셀렉터 재조회**를 수행한다. v8의 별도 FLR을 추가하지 않는다. `profiles/board.json`의 캡처 근거를 검사해 만든 헤더로 장치·Subsystem·PROM·칩·초기 레지스터를 고정하며, 초기 상태와 펌웨어 자산 5개의 크기/SHA256을 U 전에 확인한다. GOP 해제 후 독점 접근 상태에서도 decode/config/BAR/cold/PROM을 다시 검사한다. 기존 Unlock의 독립 화면 조건은 이 빌드에서 v8의 완전 해제 및 공유 콘솔 보호 검사로 대체한다. 원래 Unlock 빌드의 독립 화면 검사는 유지한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1 -FullUnlock -Profile profiles/board.json
+experiments\gop\test.cmd
+experiments\gop\test-patch-state.cmd
+python tools/package_gop_experiment.py --output build/gop-experiment-usb-v9-unlock-rejoin --zip build/gop-experiment-usb-v9-unlock-rejoin.zip --assets B:\firmware
+```
+
+`--assets`는 자산 파일 5개가 직접 들어 있는 폴더다. 패키징에서도 크기와 SHA256이 일치해야 파일을 포함한다. 생략하면 `RTX3080-UNLOCK/ASSETS`에 기존 자산을 넣어야 하며, 누락된 채 부팅하면 U/화면 해제 전에 거부한다. 빌드 프로필 재검사에는 원본 Probe REPORT/PROM이 필요하다. 배포본에는 생성한 프로필 헤더와 보드 JSON, 언락 소스를 포함한다.
+
+실행 절차:
+
+1. ZIP 내용물을 FAT32 USB 루트에 복사한다. 기존 RUN은 보존하고 EFI만 옛 파일로 남지 않도록 한다. `EFI/BOOT/BOOTX64.EFI`, `RTX30-GOP-TEST`, `RTX3080-UNLOCK/ASSETS`가 있어야 한다.
+2. 완전히 전원을 종료한 뒤 NVIDIA 모니터를 연결한 상태로 USB UEFI 부팅한다. **diagnostic v9-unlock-rejoin**, manifest `Mode=full-unlock`을 확인한다. 자산 검사 완료 후 U를 한 번 누른다.
+3. 화면 복귀 후 **REPORT SAVED까지 기다린 뒤 물리 전원을 종료**한다. 복귀 안내가 60초 안에 없으면 물리 전원 버튼으로 종료한다. 실패 후 재시도하거나 Windows로 계속 부팅하지 않는다.
+4. `RTX30-GOP-TEST/RUNxx/REPORT.TXT`와 `RTX3080-UNLOCK/RUNyy/REPORT.TXT` 전체를 가져온다. RUN 번호는 서로 다를 수 있다. 화면 소실 시간과 복귀·REPORT SAVED 표시 여부도 기록한다.
+
+판정:
+
+- 언락 로그의 `PATCH_TRANSACTION result=0 containment=0 ... quiesced=1 fault=0 retained=0 maps=0 FLR=1 safe=1`: 언락 및 한 번의 FLR/DMA 정리 완료.
+- GOP 로그의 `FULL_PATCH_RESULT status=0 safe=1` 뒤 `PATCH_STATE phase=before-gop SS0=88888888 SS1=00000008 ... read_ok=1 matched=1`: GOP 시작 전 패치 상태 확인.
+- `PATCH_STATE phase=after-gop SS0=88888888 SS1=00000008 ... read_ok=1 matched=1`과 `FULL_FINAL status=0 touched=1 restored=1`: GOP 복구 직후에도 두 셀렉터 유지.
+- `before-gop matched=1`, `after-gop read_ok=1 matched=0`, `restored=1`: 화면 프로토콜은 복구됐지만 셀렉터가 유지되지 않음. `FULL_FINAL status`는 오류가 된다. 값을 다시 쓰거나 추가 FLR을 하지 않는다.
+- `read_ok=0` 또는 `after-gop` 없음: 보존 여부를 판정할 수 없다. 언락/정리 실패, 사전 셀렉터 불일치 또는 독점 접근 해제 실패 시 GOP를 시작하지 않고 정지한다.
+- `console_output_status=0`, PCI 사후 기록, `PATCH_LOG_CLOSE status=0`, 마지막 `END`와 실제 `REPORT SAVED` 표시까지 확인한다.
+
+언락 코어의 로그는 화면을 호출하지 않고 USB에만 기록한다. 정리가 불확실하면 DMA 자원과 독점 접근을 유지하고 전원 종료를 기다린다. **v9는 아직 실기 미검증이며, 셀렉터 유지가 확인돼도 실제 연산 성능과 Windows 드라이버 인계를 증명하지 않는다.** 이번 실험은 Windows로 자동 진행하지 않는다.
+
+## 이전 실험: diagnostic v8-virtual-gop
 
 v7은 GPU 루트 소유자·자식이 0이고 물리 GOP·중간 TextOut·EDID 전용 자식의 검사 대상 인터페이스가 사라진 뒤, 경로와 프레임버퍼가 없는 중간 GOP 하나 때문에 중단됐다. v8은 **기존 중간 핸들의 GOP에 한해서** 장치 경로 없음, 유효한 Mode와 프레임버퍼 주소·크기 모두 0, 해당 핸들의 모든 설치 프로토콜에 활성 소유자·자식·독점 open 없음이 확인되면 잔존을 허용한다. 수동 GET/TEST/BY_HANDLE open은 활성 소유권으로 세지 않는다. 잔존 인터페이스는 GOP 열거에도 나타나야 한다. 알 수 없는 경로 없는 GOP, 물리 GOP 잔존, 루트 활성 관계, 조회 오류, 진단 로그 실패는 계속 리셋을 차단한다. 이 조건은 관측 가능한 UEFI 관계의 검사이며 펌웨어 내부 참조가 전혀 없음을 증명하지는 않는다.
 

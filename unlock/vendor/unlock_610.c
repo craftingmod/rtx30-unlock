@@ -1479,8 +1479,15 @@ int gpu_unlock_610_unlock(struct pci_dev *pdev, const struct gpu_unlock_610_shar
 		ret = unlock_transaction_claim(work);
 	if (!ret)
 		ret = unlock_transaction_layout(work);
+#ifdef GU_GOP_EXPERIMENT
+	if (!ret && !GuPhase("dma-begin"))ret = -EIO;
+#endif
 	if (!ret)
 		ret = unlock_transaction_dma(work);
+#ifdef GU_GOP_EXPERIMENT
+	if (!ret && !GuPhase("dma-end"))ret = -EIO;
+	if (!ret && !GuPhase("firmware-begin"))ret = -EIO;
+#endif
 	if (!ret)
 		ret = unlock_transaction_gfw(work);
 	if (!ret)
@@ -1493,12 +1500,21 @@ int gpu_unlock_610_unlock(struct pci_dev *pdev, const struct gpu_unlock_610_shar
 		ret = unlock_transaction_signature(work);	/* restore stock */
 	if (!ret)
 		ret = unlock_transaction_selector(work);
+#ifdef GU_GOP_EXPERIMENT
+	if (!ret && !GuPhase("firmware-end"))ret = -EIO;
+#endif
 	if (!ret)
 		ret = unlock_transaction_reset(work);
 	/* Never leave the V67 signature published for a later stock boot. */
 	if (ret && work->signature_calls == 1)
 		unlock_transaction_signature(work);
+#ifdef GU_GOP_EXPERIMENT
+	if (!GuPhase("cleanup-begin") && !ret)ret = -EIO;
+#endif
 	cleanup = unlock_transaction_unwind(work);
+#ifdef GU_GOP_EXPERIMENT
+	if (!GuPhase("cleanup-end") && !ret)ret = -EIO;
+#endif
 	if (!ret)
 		ret = cleanup;
 	if (work->retained) {

@@ -1,8 +1,10 @@
-param([switch]$TreeOnly,[switch]$LeafOnly,[switch]$FullFlr)
+param([switch]$TreeOnly,[switch]$LeafOnly,[switch]$FullFlr,[switch]$FullUnlock,[switch]$WindowsHandoff,[string]$Profile='')
 $ErrorActionPreference = 'Stop'
+if ($WindowsHandoff -and -not $FullUnlock) { throw '-WindowsHandoff requires -FullUnlock.' }
 $selectedModes=0
-foreach ($choice in @($TreeOnly,$LeafOnly,$FullFlr)) { if ($choice) { $selectedModes++ } }
+foreach ($choice in @($TreeOnly,$LeafOnly,$FullFlr,$FullUnlock)) { if ($choice) { $selectedModes++ } }
 if ($selectedModes -gt 1) { throw 'Select only one experiment mode.' }
+if ($FullUnlock) { $FullFlr=$true; if (-not $Profile) { throw '-FullUnlock requires -Profile.' } }
 . "$PSScriptRoot/toolchain.ps1"
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
@@ -15,6 +17,16 @@ try {
     if ($TreeOnly) { $modeFlags = @('-DGC_TREE_ONLY') }
     if ($LeafOnly) { $modeFlags = @('-DGC_LEAF_ONLY') }
     if ($FullFlr) { $modeFlags = @('-DGC_FULL_FLR') }
+    if ($FullUnlock) {
+        & python tools/check_profile.py $Profile --experimental --header build/gop-experiment/profile.h
+        if ($LASTEXITCODE -ne 0) { throw 'Unlock profile rejected.' }
+        Copy-Item -LiteralPath $Profile -Destination build/gop-experiment/board.json
+        $sources += @('experiments/gop/visual','unlock/app','unlock/app_io','unlock/ownership','unlock/sha256','unlock/checks','unlock/port','unlock/compat',
+            'unlock/vendor/unlock_610','unlock/vendor/prep_610','unlock/vendor/layout_610','unlock/vendor/vbios_610','unlock/vendor/gfw_eval')
+        $modeFlags += @('-DGC_FULL_UNLOCK','-DGU_GOP_EXPERIMENT','-D__KERNEL__','-DGU_UEFI_PORT',
+            '-include','build/gop-experiment/profile.h','-I','unlock/compat','-Wno-unused-parameter','-Wno-unused-function')
+    }
+    if ($WindowsHandoff) { $sources += 'experiments/gop/windows'; $modeFlags += '-DGC_WINDOWS_HANDOFF' }
     $objects = @()
     foreach ($source in $sources) {
         $object = 'build/gop-experiment/' + ($source -replace '/', '_') + '.obj'
@@ -36,6 +48,7 @@ try {
         'experiments/gop/cycle.h', 'experiments/gop/tree.h', 'experiments/gop/test_tree.c',
         'experiments/gop/leaf.h', 'experiments/gop/test_leaf.c',
         'experiments/gop/full.h', 'experiments/gop/reset.h', 'experiments/gop/test_full.c',
+        'experiments/gop/patch.h', 'experiments/gop/visual.h', 'experiments/gop/test_patch.c', 'experiments/gop/test_patch_state.c',
         'experiments/gop/test_cycle.c', 'experiments/gop/test_io.c',
         'experiments/gop/test.cmd', 'experiments/gop/README.md', 'unlock/format.h', 'unlock/runtime.h',
         'scripts/build-gop-experiment.ps1', 'scripts/toolchain.ps1', 'scripts/host-env.cmd',
@@ -45,12 +58,19 @@ try {
     })
     # Ship both cores so the bundled host tests remain runnable in either build mode.
     $records += @('experiments/gop/cycle.c', 'experiments/gop/tree.c', 'experiments/gop/leaf.c', 'experiments/gop/full.c', 'experiments/gop/reset.c')
+    if ($FullUnlock) {
+        $records += @('experiments/gop/visual.h','experiments/gop/test_visual.c','experiments/gop/test_timed_flr.c','experiments/gop/test-visual.cmd','experiments/gop/test-patch-state.cmd','unlock/assets.json','build/gop-experiment/profile.h','build/gop-experiment/board.json','gpu_family.h','tools/check_profile.py','tools/probe_profile.py','tools/gpu_family.py')
+        $records += @(Get-ChildItem unlock -Recurse -File | Where-Object {
+            $_.Extension -in '.c','.h' -and $_.FullName -notlike '*\build\*'
+        } | ForEach-Object { $_.FullName.Substring($root.Length+1).Replace('\','/') })
+    }
+    if ($WindowsHandoff) { $records += @('experiments/gop/windows.h','experiments/gop/test_windows.c','experiments/gop/test-windows.cmd','experiments/gop/windows-check.ps1','experiments/gop/test-windows-check.ps1','analysis/compute-benchmark.cu','analysis/build-benchmark.cmd','results/benchmark.json') }
     $records = @($records | Sort-Object -Unique)
     [ordered]@{
-        BuiltUtc=[DateTime]::UtcNow.ToString('o'); HardwareTested=$false
-        Mode=$(if ($FullFlr) {'full-flr'} elseif ($LeafOnly) {'leaf-member'} elseif ($TreeOnly) {'tree-read-only'} else {'cycle'})
+        BuiltUtc=[DateTime]::UtcNow.ToString('o'); HardwareTested=$false; WindowsHandoff=[bool]$WindowsHandoff
+        Mode=$(if ($FullUnlock) {'full-unlock'} elseif ($FullFlr) {'full-flr'} elseif ($LeafOnly) {'leaf-member'} elseif ($TreeOnly) {'tree-read-only'} else {'cycle'})
         EfiSha256=(Get-BuildHash 'build/gop-experiment/BOOTX64.EFI')
         Sources=@($records | ForEach-Object { [ordered]@{Path=$_; Sha256=(Get-BuildHash $_)} })
     } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 build/gop-experiment/build-manifest.json
-    Write-Output $(if ($FullFlr) {'Built v8-virtual-gop: full GOP release, one FLR and display restoration; no compute unlock.'} elseif ($LeafOnly) {'Built v5-leaf single text-member Stop/Supported/Start experiment; GPU GOP/EDID untouched by app.'} elseif ($TreeOnly) {'Built v4-tree read-only ownership capture; no detach/reconnect or unlock/FLR core linked.'} else {'Built GOP round-trip experiment. Only driver-model detach/reconnect; no unlock/FLR core linked.'})
+    Write-Output $(if ($WindowsHandoff) {'Built v14-windows-handoff: v13 recovery then verified Windows chainload; hardware untested.'} elseif ($FullUnlock) {'Built v13-mode-cycle-readback: alternate/original mode cycle and direct framebuffer verification; hardware untested.'} elseif ($FullFlr) {'Built v8-virtual-gop: full GOP release, one FLR and display restoration; no compute unlock.'} elseif ($LeafOnly) {'Built v5-leaf single text-member Stop/Supported/Start experiment; GPU GOP/EDID untouched by app.'} elseif ($TreeOnly) {'Built v4-tree read-only ownership capture; no detach/reconnect or unlock/FLR core linked.'} else {'Built GOP round-trip experiment. Only driver-model detach/reconnect; no unlock/FLR core linked.'})
 } finally { Pop-Location }

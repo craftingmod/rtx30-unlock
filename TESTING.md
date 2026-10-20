@@ -41,6 +41,8 @@ python -m unittest discover -s tools -p "test_*.py" -v
 
 ## 로컬 fixture를 사용하는 추가 검사
 
+GOP v12의 해제·언락 연결 및 자식 진단 모의 검사 22개는 `experiments/gop/test.cmd`에 포함된다. 자식 0/1/3개, 열거 API 오류, 다른 소유자, GOP 부재, open 수 범위 초과와 진단 로그 실패를 구분하고 기존 실패 처리를 유지하는지 검사한다. 실제 셀렉터 조회 검사 10개는 `experiments/gop/test-patch-state.cmd`, 실제 SetMode/Blt 및 RTC 코드 검사 22개와 시간 기록을 포함한 FLR 검사 4개는 `experiments/gop/test-visual.cmd`로 실행한다. 다른 해상도 모드 선택·왕복 설정, 프레임버퍼 전체 색상 읽기·불일치, 표시 실패·셀렉터 소실 시 후속 작업 차단, 시계 역행·오류·윤일 계산, 로그 콜백 이후 BME 재검사 및 100ms 무접근을 포함하며 실제 펌웨어는 실행하지 않는다. EFI 빌드와 자산을 포함한 패키지 생성은 [GOP 실험 안내](experiments/gop/README.md)를 따른다.
+
 다음 파일을 준비한 뒤 `-WithLocalFixtures`를 지정합니다.
 
 - `analysis/pinned-assets/`: `unlock/assets.json`의 5개 자산.
@@ -68,3 +70,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\unlock\test-all.ps1
 `tools/source_manifest.py`는 Git의 추적 파일을 기준으로 동작합니다. ZIP으로 받은 소스는 제공된 manifest를 사용해 그대로 빌드하고 패키징할 수 있습니다.
 
 검사 결과는 `unlock/build/test-results.json`에 기록합니다. host/mock 통과와 실제 USB 부팅 결과는 별개입니다.
+
+GOP v14의 Windows 파일 탐색·이미지 로드·실행 인계 모의 검사 20개는 `experiments/gop/test-windows.cmd`로 실행한다. USB 제외, 후보 부재/중복, 비정상 경로/파일/이미지, 로드 거부, 미검증 상태 및 보고 Close 실패 시 실행 차단과 StartImage 반환 처리를 검사한다. 디스크 쓰기·NVRAM·재부팅 서비스를 설치하지 않은 모의 환경이다. Windows 결과 수집 스크립트의 미측정/RTX 3080·3090 Ti 성공/다른 PCI 위치·결과 검증 실패/실행 실패/출력 오류 7개는 `experiments/gop/test-windows-check.ps1`에서 장치 조회와 벤치마크를 대체해 검사한다. 실제 Windows 부팅·NVIDIA 초기화·CUDA 성능은 별도 실기 검증 대상이다.

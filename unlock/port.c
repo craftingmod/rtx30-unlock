@@ -211,6 +211,9 @@ EFI_STATUS GuFlr(VOID) {
   UINT32 Identity=0,Capability=0;UINT16 Command=0xffff,Pending=0xffff,Ctl=0;
   UINTN Wait;EFI_STATUS ResetStatus;
   if(!Gu.saved || Gu.flrs || Gu.fault || !Gu.owned || !Gu.armed || !Gu.display_ok)return EFI_NOT_READY;
+#ifdef GU_GOP_EXPERIMENT
+  if(!GuPhase("flr-begin"))return EFI_DEVICE_ERROR;
+#endif
   if(EFI_ERROR(GuConfigRead(EfiPciIoWidthUint32,0,&Identity)) || Identity!=GU_BOARD_ID ||
      EFI_ERROR(GuConfigRead(EfiPciIoWidthUint16,4,&Command)) || Command==0xffff ||
      (Command&4) || !(Command&2) ||
@@ -231,7 +234,12 @@ EFI_STATUS GuFlr(VOID) {
   if(EFI_ERROR(ResetStatus))return EFI_DEVICE_ERROR;
   for(Wait=0;Wait<=1000000;Wait+=1000) {
     EFI_STATUS Status=RawRead(EfiPciIoWidthUint32,0,&Identity);
-    if(!EFI_ERROR(Status) && Identity==GU_BOARD_ID)return EFI_SUCCESS;
+    if(!EFI_ERROR(Status) && Identity==GU_BOARD_ID){
+#ifdef GU_GOP_EXPERIMENT
+      if(!GuPhase("flr-end"))return EFI_DEVICE_ERROR;
+#endif
+      return EFI_SUCCESS;
+    }
     if(!EFI_ERROR(Status) && Identity!=0xffffffffU && Identity!=0)break;
     if(Wait<1000000)GuStall(1000);
   }

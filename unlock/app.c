@@ -11,7 +11,10 @@
 #include <IndustryStandard/Acpi.h>
 #include <Guid/GlobalVariable.h>
 static EFI_GUID PciGuid=EFI_PCI_IO_PROTOCOL_GUID,GopGuid=EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID,
-  PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID,GlobalGuid=EFI_GLOBAL_VARIABLE;
+  PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID;
+#ifndef GU_GOP_EXPERIMENT
+static EFI_GUID GlobalGuid=EFI_GLOBAL_VARIABLE;
+#endif
 static EFI_SYSTEM_TABLE *Table;
 static UINT32 InitialConfig[64];
 static const char *Stage;
@@ -325,6 +328,80 @@ static VOID ReleaseHalt(EFI_STATUS Status,BOOLEAN Attempted) {
     (unsigned long long)Status,Stage,Attempted,(unsigned long long)contained,(unsigned)(Gu.pci!=NULL));
   Halt();
 }
+#ifdef GU_GOP_EXPERIMENT
+#include "../experiments/gop/patch.h"
+#include "../experiments/gop/visual.h"
+static BOOLEAN PatchIo;
+static GC_CONTEXT *PhaseContext;
+BOOLEAN GuPhase(const char *phase){
+  if(!GvMark(PhaseContext,phase)){Gu.fault=TRUE;return FALSE;}
+  return TRUE;
+}
+EFI_STATUS GxPrepare(GC_CONTEXT *c) {
+  Table=c->table;GuInit(Table->BootServices,c->pci);Gu.image=c->image;Gu.handle=c->target;
+  PhaseContext=c;EFI_STATUS clock=GvClockInit(c);if(EFI_ERROR(clock))return clock;
+  if(!GuPhase("preflight-begin"))return EFI_DEVICE_ERROR;
+  PatchIo=TRUE;
+  EFI_STATUS s=GuIoOpen(c->image,Table);
+  if(!EFI_ERROR(s))s=ConfigCheck(TRUE);
+  if(!EFI_ERROR(s))s=BarCheck();
+  if(!EFI_ERROR(s))s=ColdCheck();
+  if(!EFI_ERROR(s))s=PromCheck();
+  if(!EFI_ERROR(s)){
+    if(!GuPhase("assets-begin"))s=EFI_DEVICE_ERROR;
+    else {s=GuLoadAssets();if(!GuPhase("assets-end"))s=EFI_DEVICE_ERROR;}
+  }
+  GuLog("PATCH_PREFLIGHT status=%#llx profile=%u pci=%#x subsystem=%#x\n",
+    (unsigned long long)s,GU_PROFILE_BUILD,GU_BOARD_ID,GU_BOARD_SUBSYSTEM);
+  if(!GuPhase("preflight-end"))return EFI_DEVICE_ERROR;
+  return !GuLogReady() && !EFI_ERROR(s)?EFI_DEVICE_ERROR:s;
+}
+BOOLEAN GxSafe(VOID) {
+  return GuSafeToReturn() && !Gu.fault && !Gu.allocations && !Gu.dma_count && !Gu.master_attributes_pending;
+}
+VOID GxReleased(VOID){Gu.owned=FALSE;Gu.armed=FALSE;Gu.display_ok=FALSE;}
+EFI_STATUS GxPatch(BOOLEAN (*isolated)(VOID)) {
+  Gu.owned=TRUE;Gu.armed=TRUE;Gu.display_check=isolated;Gu.display_ok=isolated();
+  EFI_STATUS s=Gu.display_ok?RestoreDecode():EFI_ACCESS_DENIED;
+  if(!EFI_ERROR(s))s=ConfigCheck(FALSE);
+  if(!EFI_ERROR(s))s=BarCheck();
+  if(!EFI_ERROR(s))s=ColdCheck();
+  if(!EFI_ERROR(s))s=PromCheck();
+  if(EFI_ERROR(s) || !GuLogReady())return EFI_ERROR(s)?s:EFI_DEVICE_ERROR;
+  GuLogText("PATCH_INTENT: one real unlock transaction including its own FLR; no extra reset\n");
+  if(!GuLogReady())return EFI_DEVICE_ERROR;
+  if(!GuPhase("transaction-begin"))return EFI_DEVICE_ERROR;
+  UINT64 mask=0xffffffffULL;
+  struct pci_dev device={.dev={.dma_mask=&mask,.coherent_dma_mask=0xffffffffULL},.pm_cap=Gu.pm_cap,.refs=1};
+  struct gpu_unlock_610_shared shared={0};
+  int result=gpu_unlock_610_load_shared(&device,&shared);
+  if(!result)result=gpu_unlock_610_unlock(&device,&shared);
+  EFI_STATUS contained=GuClearMaster();LogContainment();
+  GuLog("PATCH_TRANSACTION result=%d containment=%#llx started=%u quiesced=%u fault=%u retained=%u maps=%u FLR=%u safe=%u\n",
+    result,(unsigned long long)contained,Gu.started,Gu.quiesced,Gu.fault,Gu.retained,Gu.dma_count,Gu.flrs,GxSafe());
+  if(!GxSafe() || EFI_ERROR(contained))return EFI_DEVICE_ERROR;
+  gpu_unlock_610_release_shared(&shared);
+  if(!GuPhase("transaction-end"))return EFI_DEVICE_ERROR;
+  return result || Gu.flrs!=1 || !GuLogReady()?EFI_DEVICE_ERROR:EFI_SUCCESS;
+}
+EFI_STATUS GxObserve(GC_CONTEXT *c,const char *phase) {
+  UINT32 id=0;UINT16 command=0xffff;
+  EFI_STATUS s=c->pci->Pci.Read(c->pci,EfiPciIoWidthUint32,0,1,&id);
+  if(!EFI_ERROR(s))s=c->pci->Pci.Read(c->pci,EfiPciIoWidthUint16,4,1,&command);
+  if(EFI_ERROR(s) || id!=GU_BOARD_ID || command==0xffff || (command&4) || !(command&2))return EFI_DEVICE_ERROR;
+  UINT32 ss0=GuRead32(GU_FEAT_SS0_OFFSET),ss1=GuRead32(GU_FEAT_SS1_OFFSET),plm=GuRead32(GU_FEAT_PLM_OFFSET);
+  BOOLEAN match=!Gu.fault && ss0==0x88888888U && ss1==8;
+  if(!c->log("PATCH_STATE phase=%s SS0=%08x SS1=%08x PLM=%08x command=%#x read_ok=%u matched=%u\n",
+    phase,ss0,ss1,plm,command,!Gu.fault,match))return EFI_DEVICE_ERROR;
+  GuLog("PATCH_STATE phase=%s SS0=%08x SS1=%08x PLM=%08x matched=%u\n",phase,ss0,ss1,plm,match);
+  return !GuLogReady() || Gu.fault?EFI_DEVICE_ERROR:match?EFI_SUCCESS:EFI_COMPROMISED_DATA;
+}
+EFI_STATUS GxFinish(VOID) {
+  if(!PatchIo)return EFI_SUCCESS;
+  if(!GxSafe())return EFI_ACCESS_DENIED;
+  GuReleaseAssets();PatchIo=FALSE;return GuIoClose();
+}
+#else
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
   if(!St || !St->BootServices || !St->RuntimeServices)return EFI_INVALID_PARAMETER;
   Table=St;GuInit(St->BootServices,NULL);Gu.image=Image;Gu.display_check=DisplayCheck;
@@ -416,3 +493,4 @@ finish:
   else GuConsole("Attempt cancelled or rejected. Returning without another attempt.\n");
   return status;
 }
+#endif

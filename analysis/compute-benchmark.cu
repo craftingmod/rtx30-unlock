@@ -7,7 +7,6 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <vector>
 static void cuda_check(cudaError_t e){if(e!=cudaSuccess){fprintf(stderr,"CUDA: %s\n",cudaGetErrorString(e));exit(1);}}
 static void blas_check(cublasStatus_t e){if(e!=CUBLAS_STATUS_SUCCESS){fprintf(stderr,"cuBLAS error %d\n",(int)e);exit(1);}}
@@ -46,8 +45,8 @@ static void measure(cublasHandle_t handle,int kind) {
 int main() {
   int devices=0;cuda_check(cudaGetDeviceCount(&devices));int selected=-1;cudaDeviceProp properties={};
   for(int i=0;i<devices;i++) {cudaDeviceProp p;cuda_check(cudaGetDeviceProperties(&p,i));
-    if(!strcmp(p.name,"NVIDIA GeForce RTX 3080") && !p.pciDomainID && p.pciBusID==1 && !p.pciDeviceID){if(selected!=-1)return 2;selected=i;properties=p;}}
-  if(selected<0){fprintf(stderr,"Exact RTX 3080 at 0000:01:00.0 not found\n");return 2;}
+    if(!p.pciDomainID && p.pciBusID==1 && !p.pciDeviceID){if(selected!=-1)return 2;selected=i;properties=p;}}
+  if(selected<0){fprintf(stderr,"CUDA GPU at 0000:01:00.0 not found\n");return 2;}
   cuda_check(cudaSetDevice(selected));cublasHandle_t handle;blas_check(cublasCreate(&handle));
   int runtime=0,driver=0,blas=0;cuda_check(cudaRuntimeGetVersion(&runtime));cuda_check(cudaDriverGetVersion(&driver));blas_check(cublasGetVersion(handle,&blas));
   printf("{\"gpu\":\"%s\",\"pci\":\"0000:01:00.0\",\"compute_capability\":\"%d.%d\",\"cuda_runtime\":%d,\"cuda_driver_api\":%d,\"cublas\":%d,\"benchmarks\":[",properties.name,properties.major,properties.minor,runtime,driver,blas);

@@ -1,4 +1,11 @@
 #include "full.h"
+#ifdef GC_FULL_UNLOCK
+#include "patch.h"
+#include "visual.h"
+static GC_CONTEXT *PatchContext;
+static const GF_PLAN *PatchPlan;
+static UINTN PatchChecks;
+#endif
 #include <Protocol/LoadedImage.h>
 #include <Protocol/DevicePath.h>
 #include <Protocol/EdidDiscovered.h>
@@ -47,6 +54,51 @@ static EFI_STATUS Children(GC_CONTEXT *c,EFI_HANDLE agent,EFI_HANDLE *a,EFI_HAND
   }
   return *a && *b?EFI_SUCCESS:EFI_UNSUPPORTED;
 }
+#ifdef GC_FULL_UNLOCK
+/* Observe bounded snapshots without accepting any extra child or owner. */
+static EFI_STATUS InspectChildren(GC_CONTEXT *c,EFI_HANDLE agent,const char *phase){
+  EFI_BOOT_SERVICES *bs=c->table->BootServices;EFI_GUID *roots[]={&PciGuid,&PathGuid};
+  const char *names[]={"pci-io","device-path"};EFI_HANDLE children[GC_LIMIT];UINTN unique=0;
+  EFI_STATUS result=EFI_SUCCESS;
+  if(!c->log("CHILD_INSPECT_BEGIN phase=%s target=%#llx expected_agent=%#llx\n",phase,
+    (unsigned long long)(UINTN)c->target,(unsigned long long)(UINTN)agent))return EFI_DEVICE_ERROR;
+  for(UINTN k=0;k<2;k++){
+    EFI_OPEN_PROTOCOL_INFORMATION_ENTRY *entries=NULL;UINTN n=0;
+    if(!c->log("CHILD_ROOT_INTENT phase=%s protocol=%s\n",phase,names[k]))return EFI_DEVICE_ERROR;
+    EFI_STATUS s=bs->OpenProtocolInformation(c->target,roots[k],&entries,&n);
+    if(!c->log("CHILD_ROOT_RESULT phase=%s protocol=%s status=%#llx entries=%zu\n",phase,names[k],
+      (unsigned long long)s,(size_t)n))return Free(c,entries,EFI_DEVICE_ERROR);
+    if(!EFI_ERROR(s) && (n>128 || (n && !entries)))s=EFI_COMPROMISED_DATA;
+    if(EFI_ERROR(s) && !EFI_ERROR(result))result=s;
+    for(UINTN i=0;!EFI_ERROR(s) && i<n;i++){
+      EFI_OPEN_PROTOCOL_INFORMATION_ENTRY *e=&entries[i];BOOLEAN edge=e->Attributes==EFI_OPEN_PROTOCOL_BY_CHILD_CONTROLLER;
+      BOOLEAN usable=edge && e->ControllerHandle && e->ControllerHandle!=c->target;
+      BOOLEAN duplicate=FALSE;
+      for(UINTN j=0;j<unique;j++)if(children[j]==e->ControllerHandle)duplicate=TRUE;
+      if(!c->log("CHILD_OPEN phase=%s protocol=%s index=%zu agent=%#llx child=%#llx attributes=%#x count=%u expected_agent=%u child_edge=%u usable=%u duplicate=%u\n",
+        phase,names[k],(size_t)i,(unsigned long long)(UINTN)e->AgentHandle,(unsigned long long)(UINTN)e->ControllerHandle,
+        e->Attributes,e->OpenCount,e->AgentHandle==agent,edge,usable,duplicate))return Free(c,entries,EFI_DEVICE_ERROR);
+      if(usable && !duplicate){
+        if(unique==GC_LIMIT){s=EFI_BUFFER_TOO_SMALL;if(!EFI_ERROR(result))result=s;break;}
+        children[unique++]=e->ControllerHandle;
+      }
+    }
+    s=Free(c,entries,s);if(EFI_ERROR(s) && !EFI_ERROR(result))result=s;
+  }
+  for(UINTN i=0;i<unique;i++){
+    EFI_HANDLE h=children[i];EFI_GUID *guids[]={&GopGuid,&EdidGuid,&PathGuid};const char *roles[]={"gop","edid","path"};
+    for(UINTN j=0;j<3;j++){
+      VOID *interface=NULL;
+      if(!c->log("CHILD_PROTOCOL_INTENT phase=%s handle=%#llx role=%s\n",phase,(unsigned long long)(UINTN)h,roles[j]))return EFI_DEVICE_ERROR;
+      EFI_STATUS s=bs->HandleProtocol(h,guids[j],&interface);
+      if(!c->log("CHILD_PROTOCOL_RESULT phase=%s handle=%#llx role=%s status=%#llx interface=%#llx\n",phase,
+        (unsigned long long)(UINTN)h,roles[j],(unsigned long long)s,(unsigned long long)(UINTN)interface))return EFI_DEVICE_ERROR;
+    }
+  }
+  if(!c->log("CHILD_INSPECT_END phase=%s status=%#llx unique=%zu limit=%u\n",phase,(unsigned long long)result,(size_t)unique,GC_LIMIT))return EFI_DEVICE_ERROR;
+  return result;
+}
+#endif
 static EFI_STATUS Shared(GC_CONTEXT *c,const GF_PLAN *p){
   GL_GUARD g;EFI_STATUS s=GcLeafGuard(c,&p->leaf,&g,TRUE);
   if(!EFI_ERROR(s) && !GcLeafSameGuard(&p->shared,&g))s=EFI_COMPROMISED_DATA;
@@ -71,6 +123,10 @@ static EFI_STATUS Owned(GC_CONTEXT *c,EFI_HANDLE h,EFI_HANDLE agent,UINTN *drive
       (unsigned long long)s,(size_t)count))s=EFI_DEVICE_ERROR;
     if(!EFI_ERROR(s) && (count>128 || (count && !e)))s=EFI_COMPROMISED_DATA;
     for(UINTN j=0;!EFI_ERROR(s) && j<count;j++)if(!Passive(e[j].Attributes) && (!agent || e[j].AgentHandle==agent)) {
+#ifdef GC_FULL_UNLOCK
+      if(c==PatchContext && h==c->target && Eq(guids[i],&PciGuid) && e[j].AgentHandle==c->image &&
+        !e[j].ControllerHandle && e[j].Attributes==EFI_OPEN_PROTOCOL_EXCLUSIVE && e[j].OpenCount==1)continue;
+#endif
       if(!agent && !c->log("FULL_ROOT_OPEN agent=%#llx controller=%#llx attributes=%#x count=%u\n",
         (unsigned long long)(UINTN)e[j].AgentHandle,(unsigned long long)(UINTN)e[j].ControllerHandle,e[j].Attributes,e[j].OpenCount)){s=EFI_DEVICE_ERROR;break;}
       if(e[j].Attributes==EFI_OPEN_PROTOCOL_BY_DRIVER)(*drivers)++;
@@ -153,7 +209,16 @@ EFI_STATUS GfPrepare(GC_CONTEXT *c,GF_PLAN *p){
   EFI_HANDLE agents[6];agents[0]=Owner(&p->leaf.guard,c->target,&PciGuid);
   agents[1]=Owner(&p->leaf.guard,p->leaf.physical,&GopGuid);
   agents[2]=Owner(&p->leaf.guard,p->leaf.text,&GopGuid);agents[3]=p->leaf.driver.handle;
-  EFI_HANDLE a=NULL,b=NULL;s=Children(c,agents[0],&a,&b);if(EFI_ERROR(s))return s;
+  EFI_HANDLE a=NULL,b=NULL;
+#ifdef GC_FULL_UNLOCK
+  s=InspectChildren(c,agents[0],"prepare");if(EFI_ERROR(s))return s;
+#endif
+  s=Children(c,agents[0],&a,&b);
+#ifdef GC_FULL_UNLOCK
+  if(!c->log("FULL_CHILDREN_RESULT phase=prepare status=%#llx a=%#llx b=%#llx\n",(unsigned long long)s,
+    (unsigned long long)(UINTN)a,(unsigned long long)(UINTN)b))return EFI_DEVICE_ERROR;
+#endif
+  if(EFI_ERROR(s))return s;
   if(a!=p->leaf.physical && b!=p->leaf.physical)return EFI_UNSUPPORTED;
   p->sibling=a==p->leaf.physical?b:a;
   if(p->sibling==p->leaf.text || p->sibling==p->leaf.shared)return EFI_UNSUPPORTED;
@@ -231,7 +296,21 @@ static EFI_STATUS Restored(GC_CONTEXT *c,const GF_PLAN *p,GL_PLAN *fresh,EFI_HAN
   }
   return Shared(c,p);
 }
+#ifdef GC_FULL_UNLOCK
+static BOOLEAN PatchIsolated(VOID){
+  UINTN owners=0,edges=0;PatchChecks++;
+  if(!PatchContext->log("FULL_PATCH_CHECK_BEGIN call=%zu\n",(size_t)PatchChecks))return FALSE;
+  EFI_STATUS s=Owned(PatchContext,PatchContext->target,NULL,&owners,&edges);
+  if(!EFI_ERROR(s) && (owners || edges))s=EFI_ACCESS_DENIED;
+  if(!EFI_ERROR(s))s=Detached(PatchContext,PatchPlan);
+  if(!EFI_ERROR(s))s=Shared(PatchContext,PatchPlan);
+  return PatchContext->log("FULL_PATCH_CHECK_END call=%zu status=%#llx\n",(size_t)PatchChecks,(unsigned long long)s) && !EFI_ERROR(s);
+}
+#endif
 EFI_STATUS GfRun(GC_CONTEXT *c,const GF_PLAN *p,GC_RESULT *r){
+#ifdef GC_FULL_UNLOCK
+  PatchContext=NULL;PatchPlan=NULL;PatchChecks=0;
+#endif
   memset(r,0,sizeof(*r));r->detach=r->isolated=r->claim=r->close=r->connect=r->verify=EFI_NOT_STARTED;
   EFI_BOOT_SERVICES *bs=c->table->BootServices;GL_PLAN *fresh=NULL;
   EFI_STATUS s=bs->AllocatePool(EfiLoaderData,sizeof(*fresh),(VOID **)&fresh);if(EFI_ERROR(s) || !fresh)return EFI_OUT_OF_RESOURCES;
@@ -239,8 +318,17 @@ EFI_STATUS GfRun(GC_CONTEXT *c,const GF_PLAN *p,GC_RESULT *r){
   /* Recheck PCI before any Stop; no changed BME/interrupt state is accepted after U. */
   GF_PCI now;s=GfSavePci(c,&now);if(EFI_ERROR(s))goto finish;
   if(memcmp(&now,&p->pci,sizeof(now))){s=EFI_ABORTED;goto finish;}
-  if(!c->log("FULL_INTENT full GPU GOP release and one FLR; no unlock\n")){s=EFI_DEVICE_ERROR;goto finish;}
+  if(!c->log(
+#ifdef GC_FULL_UNLOCK
+    "FULL_INTENT full GPU GOP release, real unlock with its one FLR, GOP restore and selector comparison\n"
+#else
+    "FULL_INTENT full GPU GOP release and one FLR; no unlock\n"
+#endif
+    )){s=EFI_DEVICE_ERROR;goto finish;}
   r->touched=TRUE;
+#ifdef GC_FULL_UNLOCK
+  if(!GvMark(c,"detach-begin")){s=EFI_DEVICE_ERROR;goto finish;}
+#endif
   EFI_HANDLE member=p->leaf.shared;
   s=StopAll(c,p,3,p->leaf.text,1,&member);if(EFI_ERROR(s))goto finish;
   s=StopAll(c,p,2,p->leaf.text,0,NULL);if(EFI_ERROR(s))goto finish;
@@ -259,24 +347,68 @@ EFI_STATUS GfRun(GC_CONTEXT *c,const GF_PLAN *p,GC_RESULT *r){
   r->isolated=s;
   if(!c->log("FULL_ISOLATION_RESULT status=%#llx interfaces=%#llx\n",(unsigned long long)s,(unsigned long long)detached)){s=r->isolated=EFI_DEVICE_ERROR;}
   if(EFI_ERROR(s))goto finish;
+#ifdef GC_FULL_UNLOCK
+  if(!GvMark(c,"detach-end")){s=EFI_DEVICE_ERROR;goto finish;}
+#endif
   EFI_PCI_IO_PROTOCOL *pci=NULL;r->claim=bs->OpenProtocol(c->target,&PciGuid,(VOID **)&pci,c->image,NULL,EFI_OPEN_PROTOCOL_EXCLUSIVE);
   if(EFI_ERROR(r->claim)){s=r->claim;goto finish;}
   BOOLEAN reset=FALSE;s=pci==c->pci?Shared(c,p):EFI_COMPROMISED_DATA;
+#ifdef GC_FULL_UNLOCK
+  (void)reset;PatchContext=c;PatchPlan=p;
+  if(!EFI_ERROR(s))s=GxPatch(PatchIsolated);
+  if(!c->log("FULL_PATCH_RESULT status=%#llx safe=%u\n",(unsigned long long)s,GxSafe()))s=EFI_DEVICE_ERROR;
+  /* Never hand GOP a device whose DMA cleanup or transaction failed. */
+  if(EFI_ERROR(s) || !GxSafe()){if(!EFI_ERROR(s))s=EFI_DEVICE_ERROR;goto finish;}
+  s=GxObserve(c,"before-gop");if(EFI_ERROR(s))goto finish;
+#else
   if(!EFI_ERROR(s))s=GfResetPci(c,&p->pci,&reset);
   c->log("FULL_FLR_RESULT attempted=%u status=%#llx\n",reset,(unsigned long long)s);
+#endif
   r->close=bs->CloseProtocol(c->target,&PciGuid,c->image,NULL);
   if(EFI_ERROR(r->close)){s=r->close;goto finish;}if(EFI_ERROR(s))goto finish;
+#ifdef GC_FULL_UNLOCK
+  GxReleased();
+  if(!GvMark(c,"gop-restore-begin")){s=EFI_DEVICE_ERROR;goto finish;}
+#endif
   s=Start(c,p,0,c->target);if(EFI_ERROR(s))goto finish;
-  EFI_HANDLE a=NULL,b=NULL;s=Children(c,p->drivers[0].driver.handle,&a,&b);if(EFI_ERROR(s))goto finish;
+#ifdef GC_FULL_UNLOCK
+  if(!GvMark(c,"post-start-inspect-begin")){s=EFI_DEVICE_ERROR;goto finish;}
+  s=InspectChildren(c,p->drivers[0].driver.handle,"post-start");
+  if(!GvMark(c,"post-start-inspect-end"))s=EFI_DEVICE_ERROR;
+  if(EFI_ERROR(s))goto finish;
+#endif
+  EFI_HANDLE a=NULL,b=NULL;s=Children(c,p->drivers[0].driver.handle,&a,&b);
+#ifdef GC_FULL_UNLOCK
+  if(!c->log("FULL_CHILDREN_RESULT phase=post-start status=%#llx a=%#llx b=%#llx\n",(unsigned long long)s,
+    (unsigned long long)(UINTN)a,(unsigned long long)(UINTN)b)){s=EFI_DEVICE_ERROR;goto finish;}
+#endif
+  if(EFI_ERROR(s))goto finish;
   EFI_HANDLE physical=NULL,sibling=NULL;EFI_GRAPHICS_OUTPUT_PROTOCOL *gop=NULL;
   EFI_STATUS sa=bs->HandleProtocol(a,&GopGuid,(VOID **)&gop);
-  if(!EFI_ERROR(sa) && gop){physical=a;sibling=b;}else {s=bs->HandleProtocol(b,&GopGuid,(VOID **)&gop);if(EFI_ERROR(s) || !gop){s=EFI_NOT_FOUND;goto finish;}physical=b;sibling=a;}
+#ifdef GC_FULL_UNLOCK
+  if(!c->log("FULL_CHILD_GOP candidate=0 handle=%#llx status=%#llx interface=%#llx\n",(unsigned long long)(UINTN)a,
+    (unsigned long long)sa,(unsigned long long)(UINTN)gop)){s=EFI_DEVICE_ERROR;goto finish;}
+#endif
+  if(!EFI_ERROR(sa) && gop){physical=a;sibling=b;}else {
+    s=bs->HandleProtocol(b,&GopGuid,(VOID **)&gop);
+#ifdef GC_FULL_UNLOCK
+    if(!c->log("FULL_CHILD_GOP candidate=1 handle=%#llx status=%#llx interface=%#llx\n",(unsigned long long)(UINTN)b,
+      (unsigned long long)s,(unsigned long long)(UINTN)gop)){s=EFI_DEVICE_ERROR;goto finish;}
+#endif
+    if(EFI_ERROR(s) || !gop){s=EFI_NOT_FOUND;goto finish;}physical=b;sibling=a;
+  }
   s=Start(c,p,4,physical);if(EFI_ERROR(s))goto finish;s=Start(c,p,5,sibling);if(EFI_ERROR(s))goto finish;
   s=Start(c,p,1,physical);if(EFI_ERROR(s))goto finish;
   EFI_HANDLE bridge=NULL,text=NULL;s=GcLeafPair(c,physical,&GopGuid,&bridge,&text);
   if(EFI_ERROR(s) || bridge!=p->drivers[1].driver.handle){s=EFI_COMPROMISED_DATA;goto finish;}
   s=Start(c,p,2,text);if(EFI_ERROR(s))goto finish;s=Start(c,p,3,text);r->connect=s;if(EFI_ERROR(s))goto finish;
   s=Restored(c,p,fresh,sibling);r->verify=s;r->restored=!EFI_ERROR(s);
+#ifdef GC_FULL_UNLOCK
+  if(!EFI_ERROR(s) && !GvMark(c,"gop-restore-end"))s=EFI_DEVICE_ERROR;
+  if(!EFI_ERROR(s))s=GxObserve(c,"after-gop");
+  if(!EFI_ERROR(s))s=GvDisplay(c,&p->leaf,fresh);
+  if(!EFI_ERROR(s))s=Shared(c,p);
+#endif
 finish:
   c->log("FULL_RESULT status=%#llx touched=%u detach=%#llx isolated=%#llx exclusive=%#llx close=%#llx restore=%#llx verify=%#llx restored=%u\n",
     (unsigned long long)s,r->touched,(unsigned long long)r->detach,(unsigned long long)r->isolated,(unsigned long long)r->claim,

@@ -73,3 +73,6 @@ VOID GuCopyFromIo(VOID *Destination, const VOID *Source, size_t Bytes);
 VOID *GuAlloc(size_t Bytes);
 VOID GuFree(VOID *Memory);
 VOID GuStall(UINTN Microseconds);
+#ifdef GU_GOP_EXPERIMENT
+BOOLEAN GuPhase(const char *Phase);
+#endif

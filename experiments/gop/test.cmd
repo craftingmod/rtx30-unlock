@@ -35,4 +35,9 @@ if errorlevel 1 exit /b 1
 "%GU_CC%" -std=c11 -O2 -Wall -Wextra -Werror -DGC_FULL_FLR -I deps\edk2\MdePkg\Include -I deps\edk2\MdePkg\Include\X64 experiments\gop\test_io.c experiments\gop\full.c experiments\gop\reset.c experiments\gop\leaf.c unlock\format.c -o build\gop-experiment\full-app-tests.exe
 if errorlevel 1 exit /b 1
 build\gop-experiment\full-app-tests.exe
+if errorlevel 1 exit /b 1
+"%GU_CC%" -std=c11 -O2 -Wall -Wextra -Werror -DGC_FULL_UNLOCK -I deps\edk2\MdePkg\Include -I deps\edk2\MdePkg\Include\X64 experiments\gop\test_patch.c experiments\gop\full.c experiments\gop\reset.c experiments\gop\leaf.c -o build\gop-experiment\patch-tests.exe
+if errorlevel 1 exit /b 1
+build\gop-experiment\patch-tests.exe
+if errorlevel 1 exit /b 1
 exit /b %errorlevel%

@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "experiment": "v14-windows-handoff",
+  "date": "2026-10-21",
+  "method": "One process per state; 4096x4096 GEMM, 2-second warmup per precision, 30 samples, median timing. Baseline/patch labels follow the user-provided experiment folders.",
+  "executable_sha256": "5BC323311C1DD9D7302424CD8A098A84C813AF17AC7A371246C112F5B2B76E76",
+  "matched_benchmark_metadata": {
+    "gpu": "NVIDIA GeForce RTX 3090 Ti",
+    "pci": "0000:01:00.0",
+    "compute_capability": "8.6",
+    "cuda_runtime": 13040,
+    "cuda_driver_api": 13040,
+    "cublas": 130300
+  },
+  "baseline_summary": {
+    "CollectedAt": "2026-10-21T02:06:23.1080116+09:00",
+    "Computer": "ALYAC-WIN",
+    "LastBootUpTime": "2026-10-21T02:05:14.5000000+09:00",
+    "NvidiaSmiExitCode": 0,
+    "BenchmarkExitCode": 0,
+    "BenchmarkSha256": "5BC323311C1DD9D7302424CD8A098A84C813AF17AC7A371246C112F5B2B76E76",
+    "BenchmarkState": "passed"
+  },
+  "patched_summary": {
+    "CollectedAt": "2026-10-21T02:02:22.6617396+09:00",
+    "Computer": "ALYAC-WIN",
+    "LastBootUpTime": "2026-10-21T01:52:02.5000000+09:00",
+    "NvidiaSmiExitCode": 0,
+    "BenchmarkExitCode": 0,
+    "BenchmarkSha256": "5BC323311C1DD9D7302424CD8A098A84C813AF17AC7A371246C112F5B2B76E76",
+    "BenchmarkState": "passed"
+  },
+  "comparisons": [
+    {
+      "name": "fp32_pedantic",
+      "baseline_tflops": 29.369307,
+      "patched_tflops": 29.619342,
+      "ratio": 1.0085134797358344,
+      "change_percent": 0.8513479735834384,
+      "baseline_median_ms": 4.67968,
+      "patched_median_ms": 4.640176
+    },
+    {
+      "name": "fp16_tensor_fp32_accumulate",
+      "baseline_tflops": 72.672265,
+      "patched_tflops": 137.30714,
+      "ratio": 1.8894022361901066,
+      "change_percent": 88.94022361901067,
+      "baseline_median_ms": 1.891216,
+      "patched_median_ms": 1.00096
+    },
+    {
+      "name": "bf16_tensor_fp32_accumulate",
+      "baseline_tflops": 72.754133,
+      "patched_tflops": 137.30714,
+      "ratio": 1.8872761496587418,
+      "change_percent": 88.72761496587418,
+      "baseline_median_ms": 1.889088,
+      "patched_median_ms": 1.00096
+    }
+  ],
+  "limitations": [
+    "One process per state; cross-boot reproducibility not established.",
+    "Correctness checks only first and last matrix result elements.",
+    "No independent Windows selector-register measurement or baseline cold-state report.",
+    "nvidia-smi captures precede benchmark and do not establish equal temperature/clocks/load during timed work."
+  ],
+  "input_sha256": {
+    "V14BaselineResult/benchmark.json": "d784853c978d718d2046a023bb41994e933b6ee65908346f666bff96f7933a1d",
+    "V14BaselineResult/summary.json": "ee1e9eec71837ed7ba61c1beb0506856dd0b820546fbf44db7ba1dbb82068535",
+    "V14BaselineResult/display-devices.json": "9d8c1cb03f4f198be186adbdc0eed8790fd2274a01b47cdc00e30522a917d3e2",
+    "V14BaselineResult/nvidia-smi.txt": "7fb15438c79cb57216d3742528aee42463bbd4be546c0fb52dfc33f1d9935bdb",
+    "V14RESULT/benchmark.json": "4088ec830883919aa4096dc0805e9e80248943fc764823b84c74b5c70889e551",
+    "V14RESULT/summary.json": "6fd60b197ba387fc5b1d3114e5a49a6d2985e0584c43d6989ea9c1da58733e21",
+    "V14RESULT/display-devices.json": "9d8c1cb03f4f198be186adbdc0eed8790fd2274a01b47cdc00e30522a917d3e2",
+    "V14RESULT/nvidia-smi.txt": "60ceaa956d27e215ebcfbb704867c9a8fa7b5a11150f23216c1c24c9b4a85c4e"
+  }
+}
