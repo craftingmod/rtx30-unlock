@@ -1,5 +1,23 @@
 # 빌드 및 검증
 
+## NVIDIA GOP 해제·복구 실험
+
+다음 실기는 `scripts/build-gop-experiment.ps1 -FullFlr`로 만드는 v8-virtual-gop다. GPU GOP 전체 해제 및 한 번의 FLR·PCI/GOP 복구 모의 시나리오 31개와 full-FLR 앱 진입/로그/승인 검사 21개를 추가한다. 기존 실험 회귀 검사 122개와 함께 실행한다. 리셋 미지원, BME 활성, capability 순환, 입력 변화, 잔존 GOP, pending timeout, 리셋 쓰기 오류·100ms 접근 금지, PCI 복원 오류, 새 자식 핸들, Supported 거부, 독점 해제 실패와 로그 오류를 확인한다. 루트 잔존 소유자와 GOP가 동시에 남아도 전체 진단을 기록하는지 확인한다. v8은 기존 중간 핸들의 소유자 없는 가상 GOP 잔존 및 새 핸들로의 복구, 프레임버퍼 주소/크기 잔존, BY_DRIVER/BY_CHILD/EXCLUSIVE 잔존, 알 수 없는 가상 GOP, 열거 불일치와 진단 로그 실패 시 FLR 차단도 검사한다. 실제 GPU 접근은 모의 서비스로 대체한다.
+
+다음 해제 실기는 `scripts/build-gop-experiment.ps1 -LeafOnly`로 만드는 v5-leaf다. `experiments/gop/test.cmd`는 출력 멤버 분리·복구 검사 20개와 leaf 앱의 로그·승인·진입 검사 21개를 추가로 실행한다. 모의 환경에는 범용 Connect/DisconnectController, GPU 독점 접근과 PCI 쓰기가 없고, 선택 드라이버의 Stop 한 번 및 Supported 성공 후 Start 한 번만 허용한다. 부분 실패·미복구·입력/소유권 변화·드라이버 변경·로그 오류를 확인한다. `Mode=leaf-member` 패키지를 실기 검증 전 상태로 생성한다.
+
+다음 실기는 `scripts/build-gop-experiment.ps1 -TreeOnly`로 만드는 diagnostic v4-tree 읽기 전용 수집이다. `experiments/gop/test.cmd`는 기존 검사에 더해 중첩·중복·순환 관계, 경로 없는 핸들, 깊이 제한, 손상된 응답과 파일 로그 오류를 확인하는 트리 검사 12개, 실제 읽기 전용 앱 진입 검사 17개를 실행한다. 해당 모의 서비스에는 드라이버 해제·재연결·독점 접근 함수가 없다. v4-tree 빌드는 cycle 코어를 링크하지 않고 출력 map에 변경 코어가 없는지도 검사한다.
+
+독립된 실험용 EFI의 준비와 실기 절차는 [실험 안내](experiments/gop/README.md)에 있다. 기본 검사에 이 EFI의 빌드/PE 검사, 소유권·복구·장치 식별 31개 시나리오, 실제 앱 로그·승인·진입 21개 시나리오와 USB 패키지 검사를 포함한다. GPU는 실행하지 않는다. 소유권 모의 검사는 부분 해제 실패 시 복구, 독점 접근을 닫기 전 재연결 금지, GOP 재등장, 소유자 변경, PCI/GOP 핸들 재생성, 복구·로그 오류, 임의 NVIDIA 모델/Subsystem 허용과 실행 중 장치 교체 거부를 확인한다. diagnostic v3는 Device Path 자식 관계가 PCI I/O보다 먼저 열거되는 사용자 로그의 구성을 재현하고, 중복 자식 제거·자식 소유자 및 경로 검증·원래 오류 상태 보존을 확인한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1
+experiments\gop\test.cmd
+python tools/test_gop_experiment.py
+```
+
+이 실험은 자체 빌드 manifest로 사용한 소스·EDK2 헤더를 기록하고 패키징 시 다시 검증한다. 기존 Unlock 릴리스용 SOURCE-MANIFEST와 독립된 경로다. 실기 로그 없이 GOP 복구나 Intel GOP 없는 Unlock 성공으로 해석하지 않는다.
+
 ## 기본 검사
 
 Windows에서 README의 컴파일러와 Python을 설치한 뒤 저장소 루트에서 실행합니다.

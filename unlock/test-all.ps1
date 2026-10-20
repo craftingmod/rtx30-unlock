@@ -5,6 +5,9 @@ $logDir=Join-Path $PSScriptRoot 'build'
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $jobs=@(
  @{Name='probe-build';Kind='powershell';Path='scripts/build-probe.ps1'},
+ @{Name='gop-experiment-build';Kind='powershell';Path='scripts/build-gop-experiment.ps1'},
+ @{Name='gop-experiment-cycle';Kind='cmd';Path='experiments/gop/test.cmd'},
+ @{Name='gop-experiment-usb';Kind='python';Path='tools/test_gop_experiment.py'},
  @{Name='unlock-build';Kind='powershell';Path='unlock/build.ps1'},
  @{Name='probe';Kind='cmd';Path='test.cmd'},
  @{Name='probe-profile';Kind='python';Path='tools/test_probe_profile.py'},

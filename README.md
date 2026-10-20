@@ -1,5 +1,7 @@
 # RTX 3080 Unlock
 
+Intel GOP 없이 타깃 NVIDIA 카드로 출력하는 환경을 위한 [GOP 해제·복구 실험](experiments/gop/README.md)을 별도 EFI로 제공한다. 첫 단계는 언락·FLR 없이 드라이버 해제와 재연결만 확인한다. [조사 및 설계](docs/NVIDIA-GOP-RESEARCH.md)를 참고하되 실기 성공 여부는 아직 확인되지 않았다.
+
 MSI RTX 3080 10GB에서 검증한 Windows용 UEFI 연산 언락 실험입니다. USB로 UEFI 앱을 실행한 뒤, 재부팅 없이 Windows로 이어서 부팅합니다.
 
 **실기 검증 범위는 아래의 MSI RTX 3080 환경입니다.** 다른 RTX 30 GA10x GPU는 프로필 기반 실험 모드로 시도할 수 있습니다. 실험 모드에서도 장치·화면 경로·펌웨어 검사에 맞지 않으면 실행을 거부합니다.
