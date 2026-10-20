@@ -49,7 +49,7 @@ static EFI_STATUS EFIAPI Load(BOOLEAN policy,EFI_HANDLE parent,EFI_DEVICE_PATH_P
   EFI_DEVICE_PATH_PROTOCOL *end=(VOID *)((UINT8 *)file+4+sizeof(WindowsPath));assert(end->Type==END_DEVICE_PATH_TYPE && end->SubType==END_ENTIRE_DEVICE_PATH_SUBTYPE);
   *image=MissingImage?NULL:(EFI_HANDLE)(UINTN)99;return LoadStatus;
 }
-static EFI_STATUS EFIAPI Start(EFI_HANDLE h,UINTN *n,CHAR16 **data){assert(h==Plan.image && !n && !data && Closes==1);Starts++;return StartStatus;}
+static EFI_STATUS EFIAPI Start(EFI_HANDLE h,UINTN *n,CHAR16 **data){assert(h==Plan.image && !n && !data && Closes==(Context.quiet?0:1));Starts++;return StartStatus;}
 static EFI_STATUS EFIAPI Unload(EFI_HANDLE h){assert(h==(EFI_HANDLE)(UINTN)99);Unloads++;return UnloadStatus;}
 static void Setup(void){
   memset(&Bs,0,sizeof(Bs));memset(&Table,0,sizeof(Table));memset(&Plan,0,sizeof(Plan));memset(&Context,0,sizeof(Context));
@@ -86,5 +86,7 @@ int main(void){
   Setup();Plan.image=(EFI_HANDLE)(UINTN)99;report=&Report;FailClose=TRUE;assert(GwStart(&Context,&Plan,&report,TRUE)==EFI_DEVICE_ERROR && !Starts && Closes==1 && !report);
   Setup();Plan.image=(EFI_HANDLE)(UINTN)99;report=&Report;StartStatus=EFI_LOAD_ERROR;assert(GwStart(&Context,&Plan,&report,TRUE)==EFI_LOAD_ERROR && Starts==1 && !report);
   Setup();Plan.image=(EFI_HANDLE)(UINTN)99;report=&Report;assert(GwStart(&Context,&Plan,&report,TRUE)==EFI_ABORTED && Starts==1 && !report);
-  puts("PASS 20 Windows discovery/load/handoff scenarios; no disk writes or NVRAM services installed");return 0;
+  Setup();Context.quiet=TRUE;Plan.image=(EFI_HANDLE)(UINTN)99;report=NULL;assert(GwStart(&Context,&Plan,&report,TRUE)==EFI_ABORTED && Starts==1 && !Closes);
+  Setup();Context.quiet=TRUE;Plan.image=(EFI_HANDLE)(UINTN)99;report=NULL;assert(GwStart(&Context,&Plan,&report,FALSE)==EFI_ACCESS_DENIED && !Starts);
+  puts("PASS 22 Windows discovery/load/handoff scenarios; no disk writes or NVRAM services installed");return 0;
 }

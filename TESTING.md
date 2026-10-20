@@ -71,4 +71,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\unlock\test-all.ps1
 
 검사 결과는 `unlock/build/test-results.json`에 기록합니다. host/mock 통과와 실제 USB 부팅 결과는 별개입니다.
 
-GOP v14의 Windows 파일 탐색·이미지 로드·실행 인계 모의 검사 20개는 `experiments/gop/test-windows.cmd`로 실행한다. USB 제외, 후보 부재/중복, 비정상 경로/파일/이미지, 로드 거부, 미검증 상태 및 보고 Close 실패 시 실행 차단과 StartImage 반환 처리를 검사한다. 디스크 쓰기·NVRAM·재부팅 서비스를 설치하지 않은 모의 환경이다. Windows 결과 수집 스크립트의 미측정/RTX 3080·3090 Ti 성공/다른 PCI 위치·결과 검증 실패/실행 실패/출력 오류 7개는 `experiments/gop/test-windows-check.ps1`에서 장치 조회와 벤치마크를 대체해 검사한다. 실제 Windows 부팅·NVIDIA 초기화·CUDA 성능은 별도 실기 검증 대상이다.
+GOP v14의 Windows 파일 탐색·이미지 로드·실행 인계 모의 검사 22개는 `experiments/gop/test-windows.cmd`로 실행한다. USB 제외, 후보 부재/중복, 비정상 경로/파일/이미지, 로드 거부, 미검증 상태 및 보고 Close 실패 시 실행 차단과 StartImage 반환 처리를 검사한다. 디스크 쓰기·NVRAM·재부팅 서비스를 설치하지 않은 모의 환경이다. Windows 결과 수집 스크립트의 미측정/RTX 3080·3090 Ti 성공/다른 PCI 위치·결과 검증 실패/실행 실패/출력 오류 7개는 `experiments/gop/test-windows-check.ps1`에서 장치 조회와 벤치마크를 대체해 검사한다. 실제 Windows 부팅·NVIDIA 초기화·CUDA 성능은 별도 실기 검증 대상이다.
+
+GOP v15 production 경로는 `experiments/gop/test-production.cmd`로 검사한다. 실제 앱의 U 없는 시작 게이트, DEBUG.ON 유무에 따른 로그 선택과 쓰기 오류 검사, 실제 자산 IO의 기본 무생성/무쓰기/무Flush, 디버그 보고서 유지와 자산·정리 실패 처리를 모의 서비스로 확인한다. Windows 인계 검사에는 무로그 상태에서 검증 성공 시 실행 및 검증 실패 시 실행 차단을 포함한다. 실제 USB 자동 부팅 시간·SSD EFI 설치는 검사하지 않는다.

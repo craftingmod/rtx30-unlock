@@ -1,0 +1,63 @@
+/* Real unlock file IO with fake firmware; no filesystem or GPU access. */
+#include "../../unlock/app_io.c"
+#include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
+GU_PLATFORM Gu;
+GU_ASSET GuAssets[5];
+VOID *GuAlloc(size_t n){return malloc(n);}
+VOID GuFree(VOID *p){free(p);}
+BOOLEAN GuSafeToReturn(VOID){return !Gu.fault;}
+static EFI_BOOT_SERVICES Bs;
+static EFI_SYSTEM_TABLE System;
+static EFI_LOADED_IMAGE_PROTOCOL Loaded;
+static EFI_SIMPLE_FILE_SYSTEM_PROTOCOL Fs;
+static EFI_FILE_PROTOCOL DiskRoot,AssetParent,FileRun,FileReport;
+static struct {USB_DEVICE_PATH usb;EFI_DEVICE_PATH_PROTOCOL end;} Path;
+static unsigned Creates,Writes,Flushes,RunQueries;
+static BOOLEAN ShortWrite;
+static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *g,VOID **p){
+  (void)h;
+  if(!memcmp(g,&LoadedGuid,sizeof(*g)))*p=&Loaded;
+  else if(!memcmp(g,&PathGuid,sizeof(*g)))*p=&Path;
+  else {assert(!memcmp(g,&FsGuid,sizeof(*g)));*p=&Fs;}
+  return EFI_SUCCESS;
+}
+static EFI_STATUS EFIAPI Volume(EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *f,EFI_FILE_PROTOCOL **p){assert(f==&Fs);*p=&DiskRoot;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI Close(EFI_FILE_PROTOCOL *f){(void)f;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI Open(EFI_FILE_PROTOCOL *f,EFI_FILE_PROTOCOL **p,CHAR16 *name,UINT64 mode,UINT64 attr){
+  (void)attr;*p=NULL;if(mode&EFI_FILE_MODE_CREATE)Creates++;
+  if(f==&DiskRoot){*p=&AssetParent;return EFI_SUCCESS;}
+  if(f==&AssetParent){
+    if(name[0]=='A')return EFI_NOT_FOUND;
+    RunQueries++;if(mode==EFI_FILE_MODE_READ)return EFI_NOT_FOUND;
+    *p=&FileRun;return EFI_SUCCESS;
+  }
+  assert(f==&FileRun);if(mode==EFI_FILE_MODE_READ)return EFI_NOT_FOUND;
+  *p=&FileReport;return EFI_SUCCESS;
+}
+static EFI_STATUS EFIAPI Info(EFI_FILE_PROTOCOL *f,EFI_GUID *g,UINTN *n,VOID *out){
+  (void)f;(void)g;memset(out,0,*n);((EFI_FILE_INFO *)out)->Size=sizeof(EFI_FILE_INFO);((EFI_FILE_INFO *)out)->Attribute=EFI_FILE_DIRECTORY;return EFI_SUCCESS;
+}
+static EFI_STATUS EFIAPI Write(EFI_FILE_PROTOCOL *f,UINTN *n,VOID *p){assert(f==&FileReport && p && *n);Writes++;if(ShortWrite)(*n)--;return EFI_SUCCESS;}
+static EFI_STATUS EFIAPI Flush(EFI_FILE_PROTOCOL *f){assert(f==&FileReport);Flushes++;return EFI_SUCCESS;}
+static void Setup(void){
+  memset(&Gu,0,sizeof(Gu));memset(&Bs,0,sizeof(Bs));memset(&System,0,sizeof(System));
+  Bs.HandleProtocol=Handle;System.BootServices=&Bs;Loaded.DeviceHandle=(EFI_HANDLE)(UINTN)1;Fs.OpenVolume=Volume;
+  DiskRoot.Open=AssetParent.Open=FileRun.Open=Open;AssetParent.GetInfo=FileRun.GetInfo=Info;
+  DiskRoot.Close=AssetParent.Close=FileRun.Close=FileReport.Close=Close;FileReport.Write=Write;FileReport.Flush=Flush;
+  memset(&Path,0,sizeof(Path));Path.usb.Header.Type=MESSAGING_DEVICE_PATH;Path.usb.Header.SubType=MSG_USB_DP;Path.usb.Header.Length[0]=sizeof(Path.usb);
+  Path.end.Type=END_DEVICE_PATH_TYPE;Path.end.SubType=END_ENTIRE_DEVICE_PATH_SUBTYPE;Path.end.Length[0]=4;
+  Creates=Writes=Flushes=RunQueries=0;ShortWrite=FALSE;
+}
+int main(void){
+  Setup();GuIoSetQuiet(TRUE);assert(GuIoOpen(NULL,&System)==EFI_SUCCESS && GuLogReady() && !Report && !RunQueries && !Creates);
+  GuLog("ignored %u\n",1);GuLogText("ignored\n");assert(!Writes && !Flushes);
+  assert(GuLoadAssets()==EFI_NOT_FOUND && !Creates);assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(FALSE);assert(GuIoOpen(NULL,&System)==EFI_SUCCESS && Report && Creates==2 && Writes==2 && Flushes==2);
+  assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(FALSE);ShortWrite=TRUE;assert(GuIoOpen(NULL,&System)==EFI_DEVICE_ERROR && !GuLogReady());assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(TRUE);assert(GuIoOpen(NULL,&System)==EFI_SUCCESS);Gu.fault=TRUE;
+  assert(GuIoClose()==EFI_ACCESS_DENIED);Gu.fault=FALSE;assert(GuIoClose()==EFI_SUCCESS);
+  puts("PASS quiet asset IO: no RUN/create/write/flush; debug reports retained; asset and containment failures preserved");return 0;
+}

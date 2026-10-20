@@ -6,8 +6,13 @@
 #include "visual.h"
 #ifdef GC_WINDOWS_HANDOFF
 #include "windows.h"
+#ifdef GC_PRODUCTION
+#define GC_DIAG "v15-auto-windows"
+#define GC_DIAG_WIDE L"v15-auto-windows"
+#else
 #define GC_DIAG "v14-windows-handoff"
 #define GC_DIAG_WIDE L"v14-windows-handoff"
+#endif
 #else
 #define GC_DIAG "v13-mode-cycle-readback"
 #define GC_DIAG_WIDE L"v13-mode-cycle-readback"
@@ -37,7 +42,7 @@
 
 static EFI_SYSTEM_TABLE *Table;
 static EFI_FILE_PROTOCOL *Report;
-static BOOLEAN LogFailed;
+static BOOLEAN LogFailed,Quiet;
 static CHAR16 *volatile Banner=L"\r\nNVIDIA GOP experiment / diagnostic " GC_DIAG_WIDE L"\r\n";
 static EFI_GUID PciGuid=EFI_PCI_IO_PROTOCOL_GUID,PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID,
   LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID,FsGuid=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID,
@@ -47,6 +52,7 @@ static EFI_GUID PciGuid=EFI_PCI_IO_PROTOCOL_GUID,PathGuid=EFI_DEVICE_PATH_PROTOC
 static BOOLEAN Log(const char *format,...) {
   char data[512];va_list args;va_start(args,format);
   size_t size=GuFormatV(data,sizeof(data),format,args);va_end(args);
+  if(Quiet)return !LogFailed;
   if(LogFailed || !Report || size>=sizeof(data)){LogFailed=TRUE;return FALSE;}
   UINTN written=size;EFI_STATUS status=Report->Write(Report,&written,data);
   if(EFI_ERROR(status) || written!=size || EFI_ERROR(Report->Flush(Report)))LogFailed=TRUE;
@@ -66,7 +72,11 @@ static VOID ShowFailure(const char *stage,EFI_STATUS status) {
   Say(L"\r\nStatus: ");Say(number);
   Say(L"Check USB RTX30-GOP-TEST/RUNxx/REPORT.TXT.\r\n"
     L"For usb-log failure, copy the entire package including RTX30-GOP-TEST.\r\n"
+#ifdef GC_PRODUCTION
+    L"Automatic boot stopped. Power off physically.\r\n");
+#else
     L"Returning to firmware in 20 seconds.\r\n");
+#endif
   Table->BootServices->Stall(20000000);
 }
 static BOOLEAN Usb(EFI_HANDLE device) {
@@ -100,6 +110,14 @@ static EFI_STATUS OpenLog(EFI_HANDLE image) {
   union {EFI_FILE_INFO info;UINT8 bytes[512];} metadata;UINTN size=sizeof(metadata);
   status=parent->GetInfo(parent,&InfoGuid,&size,&metadata);
   if(EFI_ERROR(status) || size<SIZE_OF_EFI_FILE_INFO || !(metadata.info.Attribute&EFI_FILE_DIRECTORY))return CloseFile(parent,EFI_UNSUPPORTED);
+#ifdef GC_PRODUCTION
+  EFI_FILE_PROTOCOL *debug=NULL;
+  status=parent->Open(parent,&debug,L"DEBUG.ON",EFI_FILE_MODE_READ,0);
+  if(status==EFI_NOT_FOUND){Quiet=TRUE;return CloseFile(parent,EFI_SUCCESS);}
+  if(status!=EFI_SUCCESS || !debug)return CloseFile(parent,EFI_ERROR(status)?status:EFI_DEVICE_ERROR);
+  status=CloseFile(debug,EFI_SUCCESS);
+  if(EFI_ERROR(status))return CloseFile(parent,status);
+#endif
   status=EFI_OUT_OF_RESOURCES;
   for(UINTN slot=0;slot<100;slot++) {
     CHAR16 name[]=L"RUN00";name[3]=(CHAR16)('0'+slot/10);name[4]=(CHAR16)('0'+slot%10);
@@ -138,6 +156,9 @@ static EFI_STATUS Target(GC_CONTEXT *c) {
 }
 #ifndef GC_TREE_ONLY
 static EFI_STATUS Approve(VOID) {
+#ifdef GC_PRODUCTION
+  return Say(L"Automatic unlock and Windows boot. Please wait.\r\n");
+#else
   if(!Table->ConIn || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
   EFI_STATUS status=Table->ConIn->Reset(Table->ConIn,FALSE);if(EFI_ERROR(status))return status;
   status=Say(
@@ -187,6 +208,7 @@ static EFI_STATUS Approve(VOID) {
     Table->BootServices->Stall(100000);
   }
   return EFI_TIMEOUT;
+#endif
 }
 static VOID Halt(VOID) {
   /* No stale console access or automatic boot continuation after uncertain recovery. */
@@ -195,7 +217,7 @@ static VOID Halt(VOID) {
 #endif
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   if(!table || !table->BootServices || !table->RuntimeServices)return EFI_INVALID_PARAMETER;
-  Table=table;Report=NULL;LogFailed=FALSE;
+  Table=table;Report=NULL;LogFailed=FALSE;Quiet=FALSE;
   GC_CONTEXT context={0};context.table=table;context.image=image;context.log=Log;
 #ifdef GC_WINDOWS_HANDOFF
   GW_PLAN windows={0};
@@ -212,7 +234,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #endif
   const char *stage="usb-log";
   EFI_STATUS status=OpenLog(image);
-  if(EFI_ERROR(status)){if(Report)Report->Close(Report);Report=NULL;ShowFailure(stage,status);return status;}
+  if(EFI_ERROR(status)){if(Report)Report->Close(Report);Report=NULL;ShowFailure(stage,status);
+#ifdef GC_PRODUCTION
+    Halt();
+#endif
+    return status;}
+  context.quiet=Quiet;
   /* Persist entry before the first console call, including a failing console. */
   if(!Log("ENTRY: GOP diagnostic " GC_DIAG "; mode="
 #ifdef GC_TREE_ONLY
@@ -261,23 +288,37 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   if(EFI_ERROR(status) || !approved){status=EFI_OUT_OF_RESOURCES;goto finish;}
   stage="full-prepare";status=GfPrepare(&context,approved);if(EFI_ERROR(status))goto finish;
 #ifdef GC_FULL_UNLOCK
-  status=Say(L"Verifying captured board state and five firmware assets before U. Please wait.\r\n");
+  status=Say(
+#ifdef GC_PRODUCTION
+    L"Checking board state and firmware assets. Automatic Windows boot follows.\r\n"
+#else
+    L"Verifying captured board state and five firmware assets before U. Please wait.\r\n"
+#endif
+    );
   if(EFI_ERROR(status))goto finish;
   stage="unlock-preflight";status=GxPrepare(&context);if(EFI_ERROR(status))goto finish;
 #endif
 #ifdef GC_WINDOWS_HANDOFF
   stage="windows-preflight";status=GwPrepare(&context,&windows);if(status!=EFI_SUCCESS)goto finish;
 #endif
-  stage="manual-approval";status=Approve();if(EFI_ERROR(status))goto finish;
+  stage="start-gate";status=Approve();if(EFI_ERROR(status))goto finish;
   if(!Log(
-#ifdef GC_FULL_UNLOCK
+#ifdef GC_PRODUCTION
+    "AUTO_START: all preflight checks passed; one unlock and Windows handoff\n"
+#elif defined(GC_FULL_UNLOCK)
     "MANUAL_U confirmed for full GOP release and real unlock including one FLR\n"
 #else
     "MANUAL_U confirmed for full GOP release and one FLR\n"
 #endif
     )){status=EFI_DEVICE_ERROR;goto finish;}
 #ifdef GC_FULL_UNLOCK
-  if(!GvMark(&context,"manual-u")){status=EFI_DEVICE_ERROR;goto finish;}
+  if(!GvMark(&context,
+#ifdef GC_PRODUCTION
+    "auto-start"
+#else
+    "manual-u"
+#endif
+    )){status=EFI_DEVICE_ERROR;goto finish;}
 #endif
   stage="full-stop-flr-restore";status=GfRun(&context,approved,&result);
   Log("FULL_FINAL status=%#llx touched=%u restored=%u\n",(unsigned long long)status,result.touched,result.restored);
@@ -315,7 +356,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #endif
     EFI_STATUS output=Say(
 #ifdef GC_FULL_FLR
-      L"GPU GOP restored after FLR. Saving PCI report; wait for REPORT SAVED.\r\n"
+      L"GPU GOP restored after FLR. Finishing checks.\r\n"
 #elif defined(GC_LEAF_ONLY)
       L"Text-output member restored; GPU GOP, input and ownership guards matched.\r\n"
       L"Check LEAF_RESULT for experiment status and verify this screen visually.\r\n"
@@ -324,7 +365,11 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #endif
 #ifdef GC_FULL_FLR
 #ifdef GC_FULL_UNLOCK
+#ifdef GC_PRODUCTION
+      L"Display verification complete.\r\n");
+#else
       L"Check the GREEN square at bottom right. Wait for REPORT SAVED.\r\n");
+#endif
 #else
       L"No compute unlock was attempted. Do not reset or remove the USB yet.\r\n");
 #endif
@@ -351,7 +396,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
     if(!Log("END: protocol checks complete; visual confirmation pending; power off before any unlock\n"))goto stop;
 #endif
 #ifdef GC_WINDOWS_HANDOFF
-    if(EFI_ERROR(Say(L"REPORT SAVED. Starting Windows without reboot.\r\n")))goto stop;
+    if(EFI_ERROR(Say(Quiet?L"Checks passed. Starting Windows.\r\n":L"REPORT SAVED. Starting Windows without reboot.\r\n")))goto stop;
     status=GwStart(&context,&windows,&Report,status==EFI_SUCCESS && result.touched && result.restored && GxSafe() && !LogFailed);
     if(Report)goto stop;
     Say(L"Windows did not take control or returned. Status: ");
@@ -381,6 +426,9 @@ finish:
   if(approved && EFI_ERROR(table->BootServices->FreePool(approved)))status=EFI_DEVICE_ERROR;
 #endif
   ShowFailure(stage,status);
+#ifdef GC_PRODUCTION
+  Halt();
+#endif
   return status;
 #ifndef GC_TREE_ONLY
 stop:

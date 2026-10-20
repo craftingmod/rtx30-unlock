@@ -94,10 +94,10 @@ EFI_STATUS GwPrepare(GC_CONTEXT *c,GW_PLAN *p){
   return s;
 }
 EFI_STATUS GwStart(GC_CONTEXT *c,GW_PLAN *p,EFI_FILE_PROTOCOL **report,BOOLEAN verified){
-  if(!verified || !p->image || !report || !*report)return EFI_ACCESS_DENIED;
+  if(!verified || !p->image || !report || (!c->quiet && !*report))return EFI_ACCESS_DENIED;
   if(!c->log("WINDOWS_START_INTENT image=%#llx reboot=0 reports_close_before_start=1 success_requires_OS_observation=1\n",
     (unsigned long long)(UINTN)p->image))return EFI_DEVICE_ERROR;
-  EFI_STATUS s=(*report)->Close(*report);*report=NULL;
+  EFI_STATUS s=*report?(*report)->Close(*report):EFI_SUCCESS;*report=NULL;
   if(s!=EFI_SUCCESS)return EFI_ERROR(s)?s:EFI_DEVICE_ERROR;
   s=c->table->BootServices->StartImage(p->image,NULL,NULL);
   // A return, even EFI_SUCCESS, is not a successful Windows handoff.

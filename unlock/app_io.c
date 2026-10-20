@@ -9,7 +9,8 @@ static EFI_GUID LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID,PathGuid=EFI_DEVICE_PA
   FsGuid=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID,InfoGuid=EFI_FILE_INFO_ID;
 static EFI_SYSTEM_TABLE *Table;
 static EFI_FILE_PROTOCOL *Root,*Parent,*Run,*Report;
-static BOOLEAN LogFault;
+static BOOLEAN LogFault,Quiet;
+VOID GuIoSetQuiet(BOOLEAN quiet){Quiet=quiet;}
 typedef struct {const char *name;CHAR16 *file;UINTN size;const char *hash;} ASSET_SPEC;
 static const ASSET_SPEC Specs[]={
  {"gpu-unlock/610.43.03/booter_load_ga102.bin",L"ASSETS\\booter_load_ga102.bin",61256,"056cbc064a888f80717726c54d7f64fcd68044d123870c95a74f37f4975dcaa4"},
@@ -32,6 +33,7 @@ VOID GuConsole(const char *Text) {
 #endif
 }
 VOID GuLogText(const char *Text) {
+  if(Quiet)return;
 #ifndef GU_GOP_EXPERIMENT
   GuConsole(Text);
 #endif
@@ -41,12 +43,13 @@ VOID GuLogText(const char *Text) {
   if(EFI_ERROR(status) || written!=expected || EFI_ERROR(Report->Flush(Report)))LogError();
 }
 VOID GuLog(const char *Format,...) {
+  if(Quiet)return;
   char text[1024];va_list args;va_start(args,Format);
   size_t n=GuFormatV(text,sizeof(text),Format,args);va_end(args);
   if(n>=sizeof(text)){LogError();GuConsole("Log format or length error.\n");return;}
   GuLogText(text);
 }
-BOOLEAN GuLogReady(VOID){return Report && !LogFault;}
+BOOLEAN GuLogReady(VOID){return (Quiet || Report) && !LogFault;}
 static BOOLEAN UsbPath(EFI_HANDLE Handle) {
   EFI_DEVICE_PATH_PROTOCOL *path=NULL;
   if(EFI_ERROR(Table->BootServices->HandleProtocol(Handle,&PathGuid,(VOID **)&path)) || !path)return FALSE;
@@ -80,6 +83,7 @@ EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
   status=Root->Open(Root,&Parent,L"\\RTX3080-UNLOCK",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
   if(EFI_ERROR(status) || !Parent)return EFI_NOT_FOUND;
   status=Metadata(Parent,TRUE,0);if(EFI_ERROR(status))return status;
+  if(Quiet)return EFI_SUCCESS;
   for(UINTN slot=0;slot<100;slot++) {
     CHAR16 name[]=L"RUN00";name[3]=(CHAR16)('0'+slot/10);name[4]=(CHAR16)('0'+slot%10);
     EFI_FILE_PROTOCOL *existing=NULL;

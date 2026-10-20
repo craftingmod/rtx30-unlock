@@ -47,6 +47,10 @@ def package(output, root=ROOT, assets=None):
                          'experiments/gop/test_windows.c', 'experiments/gop/test-windows.cmd',
                          'experiments/gop/windows-check.ps1', 'analysis/compute-benchmark.cu',
                          'analysis/build-benchmark.cmd', 'results/benchmark.json'})
+    if manifest.get('Production'):
+        if not manifest.get('WindowsHandoff') or mode != 'full-unlock':
+            raise ValueError('Production requires Windows handoff and full-unlock')
+        required.update({'experiments/gop/test-production.cmd', 'experiments/gop/test_quiet_io.c'})
     if not required.issubset({entry['Path'] for entry in sources}):
         raise ValueError('Incomplete experiment source manifest')
     with tempfile.TemporaryDirectory(prefix='.gop-stage-', dir=output.parent) as temporary:
@@ -58,6 +62,12 @@ def package(output, root=ROOT, assets=None):
         (marker / 'README.txt').write_text(
             'Keep this directory on the USB root. The EFI requires it before any detach.\n'
             'Per-boot diagnostics are saved in RUN00 through RUN99.\n', encoding='utf-8')
+        if manifest.get('Production'):
+            (marker / 'README.txt').write_text(
+                'Production: automatic unlock and Windows handoff after checks.\n'
+                'No RUN folders or reports are created by default.\n'
+                'Create an empty DEBUG.ON in this directory to enable detailed reports.\n'
+                'Remove DEBUG.ON after diagnosis to stop log accumulation.\n', encoding='utf-8')
         shutil.copyfile(build / 'BOOTX64.EFI', boot / 'BOOTX64.EFI')
         if mode == 'full-unlock':
             asset_target = stage / 'RTX3080-UNLOCK/ASSETS'

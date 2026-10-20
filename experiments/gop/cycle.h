@@ -21,6 +21,7 @@ typedef struct {
 } GC_SNAPSHOT;
 typedef struct {
   EFI_SYSTEM_TABLE *table;
+  BOOLEAN quiet;
   EFI_HANDLE image, target;
   EFI_PCI_IO_PROTOCOL *pci;
   UINTN location[4];

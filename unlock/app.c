@@ -341,7 +341,7 @@ EFI_STATUS GxPrepare(GC_CONTEXT *c) {
   Table=c->table;GuInit(Table->BootServices,c->pci);Gu.image=c->image;Gu.handle=c->target;
   PhaseContext=c;EFI_STATUS clock=GvClockInit(c);if(EFI_ERROR(clock))return clock;
   if(!GuPhase("preflight-begin"))return EFI_DEVICE_ERROR;
-  PatchIo=TRUE;
+  PatchIo=TRUE;GuIoSetQuiet(c->quiet);
   EFI_STATUS s=GuIoOpen(c->image,Table);
   if(!EFI_ERROR(s))s=ConfigCheck(TRUE);
   if(!EFI_ERROR(s))s=BarCheck();

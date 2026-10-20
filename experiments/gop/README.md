@@ -1,6 +1,30 @@
 # NVIDIA GOP 해제·복구 실험 1
 
-## 현재 실험: diagnostic v14-windows-handoff
+## 현재 빌드: v15-auto-windows (production 옵션, 실기 미검증)
+
+`-FullUnlock -WindowsHandoff -Production`은 기존 보드·초기값·PROM·자산 해시·독점 접근·단일 FLR·DMA 정리·GOP 복구·모드 왕복·색상 읽기·셀렉터 검사를 유지하고 **U 입력 없이 자동 진행**한다. Windows 후보가 하나인지도 먼저 검증한다. 성공한 경우에만 Windows로 이어진다. `-Production`을 생략하면 기존 v14 수동 U/상세 기록 동작이다. production이라는 옵션명은 실기 안정성 인증을 뜻하지 않는다.
+
+기본적으로 로그 파일과 RUN 폴더를 생성하지 않고 로그 Write/Flush를 호출하지 않는다. 아래의 빈 파일이 부팅 시 있으면 해당 실행에서만 기존 상세 로그를 활성화한다.
+
+```text
+USB:/RTX30-GOP-TEST/DEBUG.ON
+```
+
+두 보고서 계통(GOP 및 UNLOCK)에 같은 설정을 적용한다. 파일 내용은 읽지 않고 존재 여부로 선택한다. 진단을 끝내면 DEBUG.ON을 제거해 추가 로그 누적을 막는다. 디버그 활성 상태에서는 기존 RUN00~RUN99 보존 방식과 공간 부족 시 중단 처리를 유지하며 자동 삭제하지 않는다. 기본 모드도 자산은 매 부팅 다시 읽고 해시를 검사하므로 약 84MB 읽기 시간 자체는 남는다. 실기 소요 시간은 아직 측정하지 않았다.
+
+검사 실패 시 Windows를 시작하지 않는다. 하드웨어를 건드리기 전 실패는 화면에 단계/상태를 표시하고 정지한다. 복구가 불확실한 상태에서는 기존처럼 콘솔 접근을 피하고 정지하므로 화면이 꺼진 채 멈출 수 있다. 로그를 켜려면 전원 종료 후 DEBUG.ON을 만들어 다음 부팅을 진단한다. 실패 후 같은 부팅에서 재시도하지 않는다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1 -FullUnlock -WindowsHandoff -Production -Profile profiles/board-refresh-run01.json
+experiments\gop\test-production.cmd
+python tools/package_gop_experiment.py --output build/gop-experiment-usb-v15-auto-windows --zip build/gop-experiment-usb-v15-auto-windows.zip --assets assets
+```
+
+현재는 **USB 시험용**이다. 앱과 자산 로더의 USB 출처 검사를 유지하므로 SSD EFI에 복사만 하면 실행을 거부한다. SSD 지원/설치와 NVRAM 등록은 별도 작업이다. SSD 설치 시 전용 경로(예: `\EFI\NvidiaUnlock\BOOTX64.EFI`)와 `NVIDIA Unlock + Windows` 같은 UEFI Boot#### Description을 사용할 수 있다. EFI 파일명과 메뉴 표시 이름은 별개이며 기존 Windows Boot Manager를 덮어쓰지 않고 새 항목으로 등록할 수 있다. 이번 작업에서는 디스크 파티션이나 부팅 항목을 변경하지 않았다.
+
+시험 순서: 완전 종료 → 새 USB EFI의 **v15-auto-windows** 확인 → 키 입력 없이 Windows 진입 대기 → 동일 벤치마크로 성능 확인. 기본 모드에서는 새 RUN 폴더/REPORT가 없어야 한다. 10분간 Windows가 시작되지 않으면 물리 종료 후 DEBUG.ON을 넣어 진단한다. 기존 USB의 과거 RUN은 삭제하지 않으며 이전 로그가 남아 있어도 새 로그 생성과 구분한다.
+
+## 이전 실험: diagnostic v14-windows-handoff
 
 ### 최초 실기 결과: Windows 장치·드라이버 정상 수집, 연산은 미측정
 

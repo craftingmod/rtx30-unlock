@@ -36,6 +36,9 @@ class GopPackage(unittest.TestCase):
             self.assertIn(manifest.get('Mode', 'cycle'), ('cycle', 'tree-read-only', 'leaf-member', 'full-flr', 'full-unlock'))
             if manifest.get('Mode') == 'full-unlock':
                 self.assertTrue((output / 'RTX3080-UNLOCK/ASSETS/README.txt').is_file())
+            if manifest.get('Production'):
+                self.assertIn('DEBUG.ON', (output / 'RTX30-GOP-TEST/README.txt').read_text())
+                self.assertFalse((output / 'RTX30-GOP-TEST/DEBUG.ON').exists())
             if manifest.get('WindowsHandoff'):
                 for source, name in (('experiments/gop/windows-check.ps1', 'check.ps1'),
                                      ('analysis/compute-benchmark.cu', 'compute-benchmark.cu'),

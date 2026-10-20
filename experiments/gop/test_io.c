@@ -68,7 +68,7 @@ static EFI_STATUS EFIAPI TreeLocate(EFI_GUID *guid,EFI_DEVICE_PATH_PROTOCOL **pa
 }
 #endif
 static VOID Setup(VOID){
-  Writes=Flushes=Outputs=Polls=0;Short=FailWrite=FailFlush=LogFailed=FALSE;
+  Quiet=FALSE;Writes=Flushes=Outputs=Polls=0;Short=FailWrite=FailFlush=LogFailed=FALSE;
   ReturnDelays=FirstOutputWrites=0;OutputStatus=EFI_SUCCESS;SavedBytes=0;SavedLog[0]=0;
   memset(&File,0,sizeof(File));File.Write=Write;File.Flush=Flush;Report=&File;
   memset(&System,0,sizeof(System));memset(&Services,0,sizeof(Services));
@@ -91,7 +91,8 @@ static EFI_LOADED_IMAGE_PROTOCOL LoadedImage;
 static EFI_SIMPLE_FILE_SYSTEM_PROTOCOL Fs;
 static EFI_RUNTIME_SERVICES Runtime;
 static struct {USB_DEVICE_PATH usb;EFI_DEVICE_PATH_PROTOCOL end;} UsbPath;
-static BOOLEAN MissingMarker;
+static BOOLEAN MissingMarker,DebugMarker;
+static EFI_FILE_PROTOCOL DebugFile;
 static UINT8 SecureEnabled;
 static unsigned ReportCloses;
 static EFI_STATUS EFIAPI FileClose(EFI_FILE_PROTOCOL *file){if(file==&File)ReportCloses++;return EFI_SUCCESS;}
@@ -101,7 +102,12 @@ static EFI_STATUS EFIAPI RootOpen(EFI_FILE_PROTOCOL *root,EFI_FILE_PROTOCOL **fi
   *file=MissingMarker?NULL:&ParentFile;return MissingMarker?EFI_NOT_FOUND:EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI ParentOpen(EFI_FILE_PROTOCOL *parent,EFI_FILE_PROTOCOL **file,CHAR16 *name,UINT64 mode,UINT64 attr){
-  (void)name;assert(parent==&ParentFile);
+  assert(parent==&ParentFile);
+#ifdef GC_PRODUCTION
+  if(name[0]=='D'){*file=DebugMarker?&DebugFile:NULL;return DebugMarker?EFI_SUCCESS:EFI_NOT_FOUND;}
+#else
+  (void)name;
+#endif
   if(mode==EFI_FILE_MODE_READ){*file=NULL;return EFI_NOT_FOUND;}
   assert(attr==EFI_FILE_DIRECTORY);*file=&RunFile;return EFI_SUCCESS;
 }
@@ -135,7 +141,7 @@ static EFI_STATUS EFIAPI TreeOpens(EFI_HANDLE h,EFI_GUID *g,EFI_OPEN_PROTOCOL_IN
 }
 #endif
 static VOID Startup(VOID){
-  Setup();MissingMarker=FALSE;ReportCloses=0;SecureEnabled=1;
+  Setup();MissingMarker=FALSE;DebugMarker=TRUE;DebugFile.Close=FileClose;ReportCloses=0;SecureEnabled=1;
   memset(&RootFile,0,sizeof(RootFile));memset(&ParentFile,0,sizeof(ParentFile));memset(&RunFile,0,sizeof(RunFile));
   RootFile.Open=RootOpen;ParentFile.Open=ParentOpen;RunFile.Open=RunOpen;ParentFile.GetInfo=Metadata;
   RootFile.Close=ParentFile.Close=RunFile.Close=File.Close=FileClose;
@@ -156,11 +162,19 @@ int main(void){
   Setup();Report=NULL;assert(!Log("missing\n") && LogFailed && !Writes && !Outputs);
   Setup();char big[600];memset(big,'x',599);big[599]=0;assert(!Log("%s",big) && !Writes && !Outputs);
 #ifndef GC_TREE_ONLY
+#ifdef GC_PRODUCTION
+  Setup();System.ConIn=NULL;assert(Approve()==EFI_SUCCESS && !Polls);
+  Setup();OutputStatus=EFI_DEVICE_ERROR;assert(Approve()==EFI_DEVICE_ERROR && !Polls);
+  Startup();Report=NULL;DebugMarker=FALSE;assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_SUCCESS && Quiet && !Report && !Writes);
+  assert(Log("quiet\n") && !Writes && !Flushes);
+  Startup();assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_SUCCESS && !Quiet && Report);assert(Log("debug\n") && Writes==1 && Flushes==1);
+#else
   Setup();assert(Approve()==EFI_SUCCESS && Polls==1);
   Setup();Key=0x1b;assert(Approve()==EFI_ABORTED && Polls==1);
   Setup();InputStatus=EFI_NOT_READY;assert(Approve()==EFI_TIMEOUT && Polls==300);
   Setup();InputStatus=EFI_DEVICE_ERROR;assert(Approve()==EFI_DEVICE_ERROR && Polls==1);
   Setup();System.ConIn=NULL;assert(Approve()==EFI_UNSUPPORTED && !Polls);
+#endif
 #endif
   const UINT32 identities[]={0x250310deU,0x278610deU,0x220410deU};
   for(UINTN i=0;i<sizeof(identities)/sizeof(identities[0]);i++) {
@@ -170,6 +184,9 @@ int main(void){
   }
   Setup();DeviceCount=2;GC_CONTEXT context={0};assert(Target(&context)==EFI_UNSUPPORTED);
   Setup();DeviceIdentity=0x12341002U;assert(Target(&context)==EFI_UNSUPPORTED);
+#ifdef GC_PRODUCTION
+  puts("PASS production auto gate, quiet/debug marker, logging and target selection; no GPU access");return 0;
+#else
   Startup();MissingMarker=TRUE;
   assert(efi_main((EFI_HANDLE)(UINTN)77,&System)==EFI_NOT_FOUND && !Writes && ReturnDelays==1 && Outputs && !Report);
   Startup();OutputStatus=EFI_DEVICE_ERROR;
@@ -201,4 +218,5 @@ int main(void){
   puts("PASS 21 actual app logger/approval/target/startup scenarios; no GPU access");return 0;
 #endif
   return 0;
+#endif
 }
