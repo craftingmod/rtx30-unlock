@@ -6,7 +6,8 @@ VOID GuInit(EFI_BOOT_SERVICES *Bs, EFI_PCI_IO_PROTOCOL *Pci) {
   memset(&Gu,0,sizeof(Gu)); Gu.bs=Bs; Gu.pci=Pci;
 }
 BOOLEAN GuTargetConfig(const UINT32 *C, UINTN S, UINTN B, UINTN D, UINTN F) {
-  return C && !S && B==1 && !D && !F && C[0]==GU_BOARD_ID &&
+  BOOLEAN location=GU_PROFILE_BUILD ? S<=65535 && B<=255 && D<=31 && F<=7 : !S && B==1 && !D && !F;
+  return C && location && C[0]==GU_BOARD_ID &&
     C[11]==GU_BOARD_SUBSYSTEM && (C[2]>>24)==3 && !((C[3]>>16)&0x7f);
 }
 BOOLEAN GuSafeToReturn(VOID) {

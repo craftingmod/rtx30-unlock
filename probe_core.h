@@ -17,12 +17,14 @@ typedef struct {
 typedef struct {
   UINT32 Config[64];
   UINT64 BarSize;
+  UINT64 BarBase;
   EFI_STATUS BarStatus;
   BOOLEAN MemoryEnabled;
   PROBE_SAMPLE Samples[PROBE_SAMPLE_COUNT];
 } PROBE_RESULT;
 
 BOOLEAN ProbeMatches(const UINT32 *Config);
+BOOLEAN ProbeSupportsDetail(const UINT32 *Config);
 EFI_STATUS ProbeCollect(EFI_PCI_IO_PROTOCOL *Pci, EFI_BOOT_SERVICES *Bs,
                        PROBE_RESULT *Result);
 EFI_STATUS ProbeReadProm(EFI_PCI_IO_PROTOCOL *Pci, const PROBE_RESULT *Result,

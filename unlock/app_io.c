@@ -90,7 +90,7 @@ EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
     if(status!=EFI_NOT_FOUND)return status;
     status=Run->Open(Run,&Report,L"REPORT.TXT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,0);
     if(EFI_ERROR(status) || !Report)return EFI_DEVICE_ERROR;
-    GuLog("RTX3080 UEFI unlock experiment v0.10\nRUN%02u\nBus Master protocol state checks; hardware fix unproven; one manual attempt per launch.\n",(unsigned)slot);
+    GuLog("RTX GA10x UEFI unlock experiment\nRUN%02u\nBus Master protocol state checks; hardware fix unproven; one manual attempt per launch.\n",(unsigned)slot);
     GuLogText("PIO readback is not an execution gate. This path does not independently verify TCM contents; FWSEC scratch/WPR results are required.\n");
     return GuLogReady()?EFI_SUCCESS:EFI_DEVICE_ERROR;
   }

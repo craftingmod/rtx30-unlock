@@ -4,6 +4,7 @@
 #include "checks.h"
 #include "sha256.h"
 #include "ownership.h"
+#include "../gpu_family.h"
 #include "vendor/unlock_610.h"
 #include "vendor/gfw_eval.h"
 #include <Protocol/GraphicsOutput.h>
@@ -69,7 +70,14 @@ static BOOLEAN DisplayCheck(VOID) {
     }
     EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *mode=gop->Mode;
     status=Gu.bs->HandleProtocol(handles[i],&PathGuid,(VOID **)&path);
-    int route=!EFI_ERROR(status) && path?GuDisplayPath(path,256):0;
+    int route=0;
+    if(!EFI_ERROR(status) && path) {
+#if GU_PROFILE_BUILD
+      route=GuIndependentDisplay(Gu.bs,Gu.pci,Gu.handle,path)?1:0;
+#else
+      route=GuDisplayPath(path,256);
+#endif
+    }
     GuLog("GOP[%u] path_status=%#llx route=%d framebuffer=%#llx bytes=%zu mode=%u max_mode=%u info_bytes=%zu console=%u\n",
       (unsigned)i,(unsigned long long)status,route,(unsigned long long)mode->FrameBufferBase,
       (size_t)mode->FrameBufferSize,mode->Mode,mode->MaxMode,(size_t)mode->SizeOfInfo,(unsigned)(handles[i]==Table->ConsoleOutHandle));
@@ -121,8 +129,12 @@ static EFI_STATUS ConfigCheck(BOOLEAN Save) {
   if(EFI_ERROR(status))return status;
   status=ReadConfig(config);if(EFI_ERROR(status))return status;
   BOOLEAN checked=GuCheckConfig(config,segment,bus,device,function,&caps);
-  BOOLEAN valid=checked && config[2]==0x030000a1 && config[0xc8/4]==0x00050011 &&
-    config[0x10/4]==0x84000000 && !(config[(caps.pcie+8)/4]&0x00200000U);
+  BOOLEAN valid=checked && !(config[(caps.pcie+8)/4]&0x00200000U);
+#if GU_PROFILE_BUILD
+  valid=valid && config[2]==GU_CLASS_REVISION;
+#else
+  valid=valid && config[2]==0x030000a1 && config[0xc8/4]==0x00050011 && config[0x10/4]==0x84000000;
+#endif
   BOOLEAN same=Save || !memcmp(config,InitialConfig,sizeof(config));
   if(Save || !valid || !same)ConfigLog(config);
   GuLog("target BDF=%zu:%zu:%zu.%zu checks=%u pm=%#x pcie=%#x msi=%#x msix=%#x\n",
@@ -192,7 +204,15 @@ static EFI_STATUS FindTarget(VOID) {
     status=Gu.bs->HandleProtocol(handles[i],&PciGuid,(VOID **)&pci);
     if(!EFI_ERROR(status) && pci)status=pci->Pci.Read(pci,EfiPciIoWidthUint32,0,1,&id);
     if(EFI_ERROR(status) || !pci){GuLog("PCI scan failed: index=%zu status=%#llx\n",(size_t)i,(unsigned long long)status);status=EFI_DEVICE_ERROR;break;}
-    if(id==GU_BOARD_ID){found++;Gu.handle=handles[i];Gu.pci=pci;}
+    if(id==GU_BOARD_ID){
+#if GU_PROFILE_BUILD
+      UINT32 config[64];UINTN segment,bus,device,function;
+      if(EFI_ERROR(pci->Pci.Read(pci,EfiPciIoWidthUint32,0,64,config)) ||
+         EFI_ERROR(pci->GetLocation(pci,&segment,&bus,&device,&function))) {status=EFI_DEVICE_ERROR;break;}
+      if(!GuTargetConfig(config,segment,bus,device,function))continue;
+#endif
+      found++;Gu.handle=handles[i];Gu.pci=pci;
+    }
   }
   GuFree(handles);GuLog("PCI target matches=%zu status=%#llx\n",(size_t)found,(unsigned long long)status);
   if(EFI_ERROR(status) || found!=1)return EFI_UNSUPPORTED;
@@ -207,12 +227,21 @@ static EFI_STATUS BarCheck(VOID) {
       GuLog("bar0 descriptor: type=%u granularity=%llu min=%#llx max=%#llx length=%#llx translation=%#llx\n",
         (unsigned)r->ResType,(unsigned long long)r->AddrSpaceGranularity,(unsigned long long)r->AddrRangeMin,
         (unsigned long long)r->AddrRangeMax,(unsigned long long)r->AddrLen,(unsigned long long)r->AddrTranslationOffset);
+    UINT64 base=0x84000000ULL;
+#if GU_PROFILE_BUILD
+    UINT32 low=InitialConfig[0x10/4];
+    if((low&1) || ((low>>1)&3)==1 || ((low>>1)&3)==3) {if(r)GuFree(r);return EFI_UNSUPPORTED;}
+    base=(UINT64)(low&~15U);
+    if((low&6)==4)base|=(UINT64)InitialConfig[0x14/4]<<32;
+#endif
     if(!r || r->Desc!=ACPI_ADDRESS_SPACE_DESCRIPTOR || r->Len!=sizeof(*r)-3 || r->ResType!=0 ||
-      r->AddrRangeMin!=0x84000000 || r->AddrLen!=0x1000000 || r->AddrTranslationOffset ||
+      !base || (base&(GU_BAR_SIZE-1)) || base>MAX_UINT64-(GU_BAR_SIZE-1) ||
+      r->AddrRangeMin!=base || r->AddrLen!=GU_BAR_SIZE || r->AddrTranslationOffset ||
       /* UEFI describes an inclusive end; pinned EDK2 PciBusDxe instead returns
          PciBar.Alignment. Both representations describe this exact 16 MiB BAR. */
-      (r->AddrRangeMax!=0x84ffffff && r->AddrRangeMax!=0x00ffffff) ||
-      r->AddrSpaceGranularity!=32 || ((UINT8 *)(r+1))[0]!=ACPI_END_TAG_DESCRIPTOR)status=EFI_UNSUPPORTED;
+      (r->AddrRangeMax!=base+GU_BAR_SIZE-1 && r->AddrRangeMax!=GU_BAR_SIZE-1) ||
+      (r->AddrSpaceGranularity!=32 && (!GU_PROFILE_BUILD || r->AddrSpaceGranularity!=64)) ||
+      ((UINT8 *)(r+1))[0]!=ACPI_END_TAG_DESCRIPTOR)status=EFI_UNSUPPORTED;
     else {
       UINT8 *raw=(UINT8 *)r,sum=0;
       for(UINTN i=0;i<sizeof(*r)+2;i++)sum=(UINT8)(sum+raw[i]);
@@ -225,25 +254,40 @@ static EFI_STATUS BarCheck(VOID) {
 static EFI_STATUS ColdCheck(VOID) {
   UINT32 chip=GuRead32(0);GuLog("chip: actual=%#x expected=%#x\n",chip,GU_BOARD_CHIP);
   if(chip!=GU_BOARD_CHIP)return EFI_UNSUPPORTED;
+#if GU_PROFILE_BUILD
+  if(!GpuGa10xPciCandidate(GU_BOARD_ID) || !GpuGa10xChip(chip))return EFI_UNSUPPORTED;
+#endif
   struct gpu_unlock_gfw_sample s={.config_ok=true,.plm=GuRead32(GU_GFW_PLM_OFFSET),
     .boot=GuRead32(GU_GFW_BOOT_OFFSET),.cpuctl=GuRead32(GU_GFW_CPUCTL_OFFSET)};
   UINT32 hi=GuRead32(0x1fa828),plm=GuRead32(GU_FEAT_PLM_OFFSET),ss0=GuRead32(GU_FEAT_SS0_OFFSET),ss1=GuRead32(GU_FEAT_SS1_OFFSET);
   GuLog("cold state: chip=%#x plm=%#x gfw=%#x/%#x/%#x WPR2_HI=%#x SS0=%#x SS1=%#x\n",
     GU_BOARD_CHIP,plm,s.plm,s.boot,s.cpuctl,hi,ss0,ss1);
-  if(Gu.fault || gpu_unlock_gfw_assess(&s) || hi>>4 || plm!=0xffffff8f ||
-    ss0!=0x46254040 || (ss1!=2 && ss1!=3) || GuRead32(0x1183a4)!=0x2800)return EFI_NOT_READY;
+  if(Gu.fault || gpu_unlock_gfw_assess(&s) || hi>>4 || plm!=GU_INITIAL_PLM ||
+    ss0!=GU_INITIAL_SS0 || (GU_PROFILE_BUILD ? ss1!=GU_INITIAL_SS1 : (ss1!=2 && ss1!=3)) ||
+    GuRead32(0x1183a4)!=GU_FB_MIB)return EFI_NOT_READY;
+#if GU_PROFILE_BUILD
+  const UINT32 offsets[]=GU_LAYOUT_OFFSETS,values[]=GU_LAYOUT_VALUES;
+  for(UINTN i=0;i<sizeof(offsets)/sizeof(offsets[0]);i++)
+    if(GuRead32(offsets[i])!=values[i])return EFI_NOT_READY;
+#endif
   return Gu.fault?EFI_DEVICE_ERROR:EFI_SUCCESS;
 }
 static EFI_STATUS PromCheck(VOID) {
   VOID *prom=GuAlloc(1048576);if(!prom)return EFI_OUT_OF_RESOURCES;
   GuCopyFromIo(prom,(VOID *)(UINTN)(Gu.bar_base+0x300000),1048576);
-  BOOLEAN good=!Gu.fault && GuHashMatches(prom,1048576,"f3dc8f07b0b8c9856d192df172dfa7f7f84ac17ef6edfdb448ad7fa94efd2789");
+  BOOLEAN good=!Gu.fault && GuHashMatches(prom,1048576,GU_PROM_SHA256);
   GuFree(prom);GuLog("live PROM hash matched=%u\n",(unsigned)good);return good?EFI_SUCCESS:EFI_CRC_ERROR;
 }
 static EFI_STATUS Arm(VOID) {
   if(!Table->ConIn || !Table->ConIn->Reset || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
   EFI_STATUS status=Table->ConIn->Reset(Table->ConIn,FALSE);if(EFI_ERROR(status))return status;
+#if GU_PROFILE_BUILD
+  GuLog("EXPERIMENTAL RTX30 GA10x: profile PCI=%#x subsystem=%#x FB=%u MiB. V67/firmware/FLR compatibility unverified.\n",
+    GU_BOARD_ID,GU_BOARD_SUBSYSTEM,GU_FB_MIB);
+  GuLogText("READY: independent display / captured PROM and cold state / verified USB log and firmware.\n");
+#else
   GuLogText("READY: MSI RTX 3080 10GB / Intel display / verified USB log and firmware.\n");
+#endif
   if(PendingOwner.agent)GuLogText("U will release the RTX firmware driver, restore verified access settings if needed, then recheck and attempt once.\n");
   GuLogText("Press U to attempt once; Esc or 30-second timeout cancels.\n");
   if(!GuLogReady())return EFI_DEVICE_ERROR;

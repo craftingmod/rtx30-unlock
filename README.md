@@ -2,9 +2,40 @@
 
 MSI RTX 3080 10GB에서 검증한 Windows용 UEFI 연산 언락 실험입니다. USB로 UEFI 앱을 실행한 뒤, 재부팅 없이 Windows로 이어서 부팅합니다.
 
-**지원 범위는 아래의 실험 환경입니다.** 다른 제조사의 RTX 3080이나 RTX 3090을 지원하는 범용 도구가 아닙니다. 장치·화면 경로·펌웨어 검사에 맞지 않으면 실행을 거부합니다.
+**실기 검증 범위는 아래의 MSI RTX 3080 환경입니다.** 다른 RTX 30 GA10x GPU는 프로필 기반 실험 모드로 시도할 수 있습니다. 실험 모드에서도 장치·화면 경로·펌웨어 검사에 맞지 않으면 실행을 거부합니다.
 
-## USB로 사용하기
+## 범용 Probe 및 실험적 RTX 30 GA10x 포트
+
+제조사와 Subsystem ID에 관계없이 모든 NVIDIA Display 장치의 PCI 정보, 256바이트 설정 공간, BAR, GOP와 Device Path를 수집합니다. RTX 30 후보 PCI 범위 `10de:22xx/24xx/25xx`에서는 먼저 `PMC_BOOT_0`만 읽고, 실제 칩이 **GA102·GA103·GA104·GA106·GA107**인 경우 상세 MMIO/PROM을 읽습니다. PCI 범위 자체를 칩·호환성의 증거로 취급하지 않습니다. GPU가 여러 개이거나 USB 기초 로그 저장에 실패하면 상세 읽기를 생략합니다. GPU 쓰기·Bus Master 활성화·FLR은 Probe에 링크하지 않습니다.
+
+```powershell
+make probe
+make probe-usb
+# build/probe-usb 내용물을 FAT32 USB에 복사하고 USB로 UEFI 부팅
+# USB의 RTX30-PROBE/RUNxx에서 결과를 가져온 후:
+make profile REPORT="captures/RUN00/REPORT.TXT" PROM="captures/RUN00/PROM.BIN"
+make test
+```
+
+`make probe`는 현재 Windows의 GPU를 검사하지 않고 `build/probe/BOOTX64.EFI`를 빌드합니다. 새 USB 패키지는 `build/probe-usb`에 만들며 기존 출력 폴더를 덮어쓰지 않습니다(`OUTPUT=...`으로 다른 폴더 지정). `INVENTORY.TXT`는 상세 읽기 전 기록, `REPORT.TXT`는 완성된 진단입니다. `PROM.BIN`과 펌웨어가 제공하는 `ROMIMAGE.BIN`은 따로 보존합니다. 프로필 출력은 기본 `profiles/board.json`이며 `PROFILE=...`으로 바꿀 수 있습니다. 기존 프로필은 덮어쓰지 않습니다.
+
+프로필은 입력 해시와 PROM 캡처 해시를 연결합니다. 유효한 칩 읽기가 있으면 실제 `PMC_BOOT_0`에서 GA10x 아키텍처를 식별합니다. 관측된 칩 식별과 독립적인 호환성 검증을 분리하며, 메모리 용량·화면 경로·펌웨어 호환성·Unlock 승인을 자동 인증하지 않습니다. 구형 v0.1 REPORT는 신규 생성기 입력으로 사용하지 않고 Probe를 다시 실행합니다.
+
+기본 `make unlock`은 독립 검증과 승인된 기존 보드 조건을 요구합니다. **위험을 감수하는 다른 RTX 30 GA10x GPU의 시도**는 다음처럼 명시적으로 선택합니다.
+
+```powershell
+make unlock EXPERIMENTAL=1 PROFILE="profiles/board.json"
+```
+
+실험 모드는 승인 플래그를 조작하지 않고, 미승인 GA102·GA103·GA104·GA106·GA107 프로필로 `build/unlock/BOOTX64.EFI`를 만듭니다. 제조사·Subsystem·PROM·칩·초기 레지스터·메모리 용량은 Probe에서 가져오며 BDF와 BAR 주소는 실행 시 조회합니다. VGA/MMU/WPR 배치는 캡처와 재비교하고 코어의 동적 레이아웃 계산을 사용합니다. GPU-Z의 제품명이나 BIOS 버전을 코드에 고정하지 않습니다.
+
+실험 모드에서도 PROM/펌웨어 해시, 완료된 GFW 상태, WPR2 미사용, PCI capability/FLR, DMA 매핑·정리 검사와 UEFI에서 **U를 누르는 단일 시도 승인**은 유지합니다. 실제 PCI 소유권을 조회해 타깃과 다른 화면 출력 장치를 요구하므로 타깃 카드에만 모니터가 연결된 환경은 거부합니다. 기존 자산 5개와 해시는 유지하며, `ga102`라는 파일명으로 다른 GA10x를 차단하지 않습니다. 공통 Booter/GSP 코드의 근거와 V67·레지스터 절차의 미검증 범위는 [GA10x 실험 호환성](docs/GA10X-EXPERIMENTAL.md)에 기록했습니다. GA100·Turing·Ada 등은 제외합니다. 실패 후 정리를 입증하지 못하면 기존 안전 정지 절차를 유지합니다.
+
+Unlock USB의 로그/자산 폴더명은 기존 호환성을 위해 `RTX3080-UNLOCK`을 사용합니다. [USB 안내](docs/USB-BOOT.md)의 자산 5개를 그 폴더의 `ASSETS`에 배치하고 실험용 EFI를 `EFI/BOOT/BOOTX64.EFI`로 복사합니다. Probe USB의 `RTX30-PROBE` 폴더와 구분하세요. 실제 하드웨어·Windows/CUDA 검증은 별도로 필요합니다.
+
+Make가 없으면 `scripts/build-probe.ps1`, `tools/probe-to-profile.py`, `unlock/test-all.ps1`, `scripts/build-unlock.ps1 -Profile ... -Experimental`을 직접 실행할 수 있습니다. 컴파일러는 PATH 또는 `LLVM_BIN`을 사용합니다.
+
+## 기존 검증 보드에서 USB로 사용하기
 
 1. [USB 준비 및 부팅 안내](docs/USB-BOOT.md)에 따라 FAT32 USB와 필요한 파일을 준비합니다.
 2. UEFI 부팅 메뉴에서 USB를 선택합니다.

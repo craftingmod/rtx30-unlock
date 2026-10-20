@@ -3,6 +3,7 @@
 #include <string.h>
 #undef NULL
 #include "probe_core.h"
+#include "gpu_family.h"
 #include <Protocol/LoadedImage.h>
 #include <Protocol/DevicePath.h>
 #include <Protocol/SimpleFileSystem.h>
@@ -11,6 +12,7 @@
 static UINT32 config[64];
 static UINT64 bar_size;
 static UINT32 failed_offset;
+static UINT32 chip_value;
 static EFI_STATUS config_status, bar_status;
 static unsigned reads, writes, prom_reads;
 static EFI_PCI_IO_PROTOCOL pci;
@@ -18,7 +20,7 @@ static EFI_BOOT_SERVICES bs;
 static PROBE_RESULT result;
 static int failures;
 static unsigned console_calls, stall_calls;
-static BOOLEAN enumerate_target;
+static BOOLEAN enumerate_target, multiple_targets, sentinel, fail_log;
 static EFI_SYSTEM_TABLE system_table;
 static EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL console_out;
 static EFI_GUID pci_guid = EFI_PCI_IO_PROTOCOL_GUID;
@@ -50,7 +52,8 @@ static EFI_STATUS EFIAPI write_config(EFI_PCI_IO_PROTOCOL *p,
 static EFI_STATUS EFIAPI get_bar(EFI_PCI_IO_PROTOCOL *p, UINT8 index,
   UINT64 *support, VOID **out) {
   EFI_ACPI_ADDRESS_SPACE_DESCRIPTOR *d;
-  CHECK(p == &pci && index == 0 && support == NULL);
+  CHECK(p == &pci && index < 6 && support == NULL);
+  if (index != 0) return EFI_UNSUPPORTED;
   if (EFI_ERROR(bar_status)) return bar_status;
   d = calloc(1, sizeof(*d));
   d->Desc = ACPI_ADDRESS_SPACE_DESCRIPTOR;
@@ -75,7 +78,7 @@ static EFI_STATUS EFIAPI read_mem(EFI_PCI_IO_PROTOCOL *p,
     if (off == PROBE_PROM_OFFSET) ((UINT32 *)buf)[0] = 0x0000aa55;
   } else {
     CHECK(n == 1);
-    *(UINT32 *)buf = off == 0 ? 0x170000a1 : 0x11223344;
+    *(UINT32 *)buf = sentinel ? 0xffffffffU : off == 0 ? chip_value : 0x11223344;
   }
   return EFI_SUCCESS;
 }
@@ -98,7 +101,9 @@ static EFI_STATUS EFIAPI locate_handles(EFI_LOCATE_SEARCH_TYPE type,
   EFI_GUID *guid, VOID *key, UINTN *count, EFI_HANDLE **out) {
   CHECK(type == ByProtocol && key == NULL);
   if (enumerate_target && !memcmp(guid, &pci_guid, sizeof(pci_guid))) {
-    *out = malloc(sizeof(EFI_HANDLE)); (*out)[0] = &pci; *count = 1;
+    *count = multiple_targets ? 2 : 1;
+    *out = malloc(*count * sizeof(EFI_HANDLE)); (*out)[0] = &pci;
+    if (multiple_targets) (*out)[1] = &pci;
     return EFI_SUCCESS;
   }
   *count = 0; *out = NULL; return EFI_NOT_FOUND;
@@ -115,7 +120,7 @@ static EFI_STATUS EFIAPI open_file(EFI_FILE_PROTOCOL *dir, EFI_FILE_PROTOCOL **o
   CHAR16 *name, UINT64 mode, UINT64 attributes) {
   *out = NULL;
   if (dir == &root_dir) {
-    CHECK(same_name(name, L"\\RTX3080-PROBE"));
+    CHECK(same_name(name, L"\\RTX30-PROBE"));
     CHECK(mode == (EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE) && attributes == 0);
     if (read_only) return EFI_WRITE_PROTECTED;
     if (!marker_present) return EFI_NOT_FOUND;
@@ -136,6 +141,7 @@ static EFI_STATUS EFIAPI open_file(EFI_FILE_PROTOCOL *dir, EFI_FILE_PROTOCOL **o
   if (same_name(name, L"REPORT.TXT")) current_file = 1;
   else if (same_name(name, L"PROM.BIN")) current_file = 2;
   else if (same_name(name, L"ROMIMAGE.BIN")) current_file = 3;
+  else if (same_name(name, L"INVENTORY.TXT")) current_file = 4;
   else { CHECK(FALSE); return EFI_ACCESS_DENIED; }
   if (mode == EFI_FILE_MODE_READ) {
     if (current_file == 1 && existing_report) { *out = &saved_file; return EFI_SUCCESS; }
@@ -148,6 +154,7 @@ static EFI_STATUS EFIAPI open_file(EFI_FILE_PROTOCOL *dir, EFI_FILE_PROTOCOL **o
 static EFI_STATUS EFIAPI write_file(EFI_FILE_PROTOCOL *file, UINTN *size, VOID *data) {
   CHECK(file == &saved_file && data != NULL && *size > 0);
   file_writes++;
+  if (fail_log) return EFI_VOLUME_FULL;
   if (current_file == 1) {
     CHECK(*size < sizeof(saved_report));
     memcpy(saved_report, data, *size); saved_report[*size] = 0; report_writes++;
@@ -197,6 +204,7 @@ static void reset(void) {
   memset(&result, 0, sizeof(result));
   config[0] = 0x220610de; config[1] = 6; config[2] = 0x030000a1;
   config[11] = 0x38901462;
+  chip_value = 0xb72000a1;
   bar_size = 0x01000000; failed_offset = 0xffffffff;
   config_status = bar_status = EFI_SUCCESS; reads = writes = prom_reads = 0;
   pci.Pci.Read = read_config; pci.Pci.Write = write_config;
@@ -209,6 +217,7 @@ static void reset(void) {
   console_out.OutputString = output_text;
   system_table.ConOut = &console_out; system_table.BootServices = &bs;
   console_calls = stall_calls = 0; enumerate_target = FALSE;
+  multiple_targets = sentinel = fail_log = FALSE;
   memset(&loaded_image, 0, sizeof(loaded_image)); loaded_image.DeviceHandle = (EFI_HANDLE)2;
   memset(&filesystem, 0, sizeof(filesystem)); filesystem.OpenVolume = open_volume;
   memset(&root_dir, 0, sizeof(root_dir));
@@ -233,7 +242,7 @@ int main(void) {
   CHECK(ProbeCollect(&pci, &bs, &result) == EFI_SUCCESS);
   CHECK(result.Config[11] == 0x38901462 && result.BarSize == 0x1000000);
   CHECK(reads == 16 && writes == 0);
-  CHECK(result.Samples[0].Value == 0x170000a1);
+  CHECK(result.Samples[0].Value == 0xb72000a1);
   CHECK(ProbeReadProm(&pci, &result, buf, sizeof(buf)) == EFI_SUCCESS);
   CHECK(buf[0] == 0x0000aa55 && buf[1023] == 0x44332211 && prom_reads == 4);
   CHECK(ProbeRomUsable(buf, sizeof(buf)));
@@ -242,10 +251,10 @@ int main(void) {
   CHECK(!ProbeRomUsable(buf, PROBE_ROM_LIMIT + 1ULL));
   buf[0] = 0xffffffff; CHECK(!ProbeRomUsable(buf, sizeof(buf)));
 
-  reset(); config[0] = 0x220d10de;
+  reset(); config[0] = 0x268410de;
   CHECK(ProbeCollect(&pci, &bs, &result) == EFI_UNSUPPORTED && reads == 0);
   reset(); config[11] = 0x12341462;
-  CHECK(ProbeCollect(&pci, &bs, &result) == EFI_UNSUPPORTED && reads == 0);
+  CHECK(ProbeCollect(&pci, &bs, &result) == EFI_SUCCESS && reads == 16);
   reset(); config[2] = 0x04000000;
   CHECK(ProbeCollect(&pci, &bs, &result) == EFI_UNSUPPORTED && reads == 0);
 
@@ -264,12 +273,15 @@ int main(void) {
   CHECK(ProbeCollect(&pci, &bs, &result) == EFI_SUCCESS && reads == 1);
   CHECK(result.Samples[1].Status == EFI_BAD_BUFFER_SIZE);
   before = reads;
-  CHECK(ProbeReadProm(&pci, &result, buf, sizeof(buf)) == EFI_BAD_BUFFER_SIZE);
+  CHECK(ProbeReadProm(&pci, &result, buf, sizeof(buf)) == EFI_NOT_READY);
   CHECK(reads == before);
 
   reset(); failed_offset = 0x118128;
   CHECK(ProbeCollect(&pci, &bs, &result) == EFI_SUCCESS);
   CHECK(result.Samples[1].Status == EFI_DEVICE_ERROR && reads == 16);
+  CHECK(ProbeReadProm(&pci, &result, buf, sizeof(buf)) == EFI_NOT_READY);
+  failed_offset = 0xffffffff;
+  CHECK(ProbeCollect(&pci, &bs, &result) == EFI_SUCCESS);
   failed_offset = PROBE_PROM_OFFSET + 1024; before = reads;
   CHECK(ProbeReadProm(&pci, &result, buf, sizeof(buf)) == EFI_DEVICE_ERROR);
   CHECK(reads == before + 2 && writes == 0);
@@ -280,21 +292,27 @@ int main(void) {
   CHECK(console_calls > 0 && stall_calls == 1 && reads == 0 && writes == 0);
   reset(); enumerate_target = TRUE;
   CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
-  CHECK(reads == 16 && writes == 0 && prom_reads == 0);
+  CHECK(reads == 0 && writes == 0 && prom_reads == 0);
   reset(); usb_output = enumerate_target = TRUE;
   buf[0] = 0x0000aa55; pci.RomImage = buf; pci.RomSize = sizeof(buf);
   CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
-  CHECK(fs_opens == 1 && run_creates == 1 && file_creates == 3);
+  CHECK(fs_opens == 1 && run_creates == 1 && file_creates == 4);
   CHECK(report_writes == 1 && prom_writes == 1 && rom_writes == 1);
-  CHECK(file_writes == 3 && file_flushes == 3 && writes == 0 && prom_reads == 1024);
+  CHECK(file_writes == 4 && file_flushes == 4 && writes == 0 && prom_reads == 1024);
   CHECK(strstr(saved_report, "matching_cards=0x0000000000000001") != NULL);
+  /* Feed the real emitted report to the host profile regression tests. */
+  {
+    FILE *capture = fopen("build/probe-test-report.txt", "wb");
+    CHECK(capture != NULL);
+    if (capture) { fputs(saved_report, capture); fclose(capture); }
+  }
   reset(); usb_output = TRUE; occupied_slot = TRUE;
   CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
   CHECK(run_creates == 1 && report_writes == 1);
   CHECK(strstr(saved_report, "run_slot=0x0000000000000001") != NULL);
   reset(); usb_output = TRUE; existing_report = TRUE;
   CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
-  CHECK(file_creates == 0 && file_writes == 0);
+  CHECK(file_creates == 1 && file_writes == 1);
   reset(); usb_output = enumerate_target = TRUE; read_only = TRUE;
   CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
   CHECK(fs_opens == 1 && run_creates == 0 && file_writes == 0 && prom_reads == 0);
@@ -307,6 +325,43 @@ int main(void) {
   reset(); usb_output = TRUE; device_path[0] = HARDWARE_DEVICE_PATH;
   CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
   CHECK(fs_opens == 0 && file_writes == 0);
+  reset(); usb_output = enumerate_target = multiple_targets = TRUE;
+  CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
+  CHECK(reads == 0 && writes == 0 && prom_reads == 0);
+  CHECK(strstr(saved_report, "[PCI:0001]") != NULL);
+  reset(); usb_output = enumerate_target = TRUE; config[0] = 0x268410de;
+  CHECK(ProbeMatches(config) && !ProbeSupportsDetail(config));
+  CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
+  CHECK(reads == 0 && writes == 0 && report_writes == 1);
+  reset(); usb_output = enumerate_target = fail_log = TRUE;
+  CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
+  CHECK(reads == 0 && writes == 0 && prom_reads == 0);
+  reset(); sentinel = TRUE;
+  CHECK(ProbeCollect(&pci, &bs, &result) == EFI_SUCCESS && reads == 1);
+  CHECK(result.Samples[0].Status == EFI_DEVICE_ERROR);
+  CHECK(ProbeReadProm(&pci, &result, buf, sizeof(buf)) == EFI_NOT_READY);
+  {
+    static const UINT32 Ids[]={0x220310de,0x241410de,0x248410de,0x250410de,0x25a210de};
+    static const UINT32 Chips[]={0xb72000a1,0xb73000a1,0xb74000a1,0xb76000a1,0xb77000a1};
+    for (UINTN i=0;i<5;i++) {
+      reset();config[0]=Ids[i];config[11]=0x12345678;chip_value=Chips[i];
+      CHECK(ProbeSupportsDetail(config));
+      CHECK(GpuGa10xChip(chip_value));
+      CHECK(ProbeCollect(&pci,&bs,&result)==EFI_SUCCESS && reads==16);
+      CHECK(ProbeReadProm(&pci,&result,buf,sizeof(buf))==EFI_SUCCESS && writes==0);
+      reset();usb_output=enumerate_target=TRUE;config[0]=Ids[i];chip_value=Chips[i];
+      CHECK(efi_main((EFI_HANDLE)1,&system_table)==EFI_SUCCESS);
+      CHECK(report_writes==1 && prom_writes==1 && writes==0);
+    }
+    /* A candidate PCI range never authorizes non-GA10x engine/PROM accesses. */
+    static const UINT32 Unsupported[]={0xb70000a1,0xb92000a1,0xb62000a1,0xb75000a1};
+    for (UINTN i=0;i<sizeof(Unsupported)/sizeof(Unsupported[0]);i++) {
+      reset();config[0]=0x250410de;chip_value=Unsupported[i];
+      CHECK(!GpuGa10xChip(chip_value));
+      CHECK(ProbeCollect(&pci,&bs,&result)==EFI_SUCCESS && reads==1);
+      CHECK(ProbeReadProm(&pci,&result,buf,sizeof(buf))==EFI_NOT_READY && reads==1 && writes==0);
+    }
+  }
   reset(); usb_output = TRUE; device_path[7] = END_INSTANCE_DEVICE_PATH_SUBTYPE;
   CHECK(efi_main((EFI_HANDLE)1, &system_table) == EFI_SUCCESS);
   CHECK(fs_opens == 0 && file_writes == 0);

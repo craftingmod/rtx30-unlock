@@ -11,6 +11,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\unlock\test-all.ps1
 
 기본 검사는 probe, port/Bus Master, preflight, runtime, PE 거부 검사와 USB 패키지 도구를 실행합니다. `evidence/boot-03/REPORT.TXT`를 preflight fixture로 사용합니다. GPU와 UEFI 서비스는 모의 환경입니다.
 
+신규 범용 경로는 `make probe` 후 `make test`로 확인합니다. 프로필 파서의 손상·누락·중복·해시 불일치, 미지원 카드, 미승인 기본 빌드 거부 및 명시적 실험 모드를 검사합니다. C Probe가 실제 출력한 REPORT도 프로필 생성기에 통과시킵니다. Probe와 프로필/호스트 런타임 검사는 GA102·GA103·GA104·GA106·GA107 전체를 포함합니다. 합성 프로필은 각각 24/8/8/12/4GiB 메모리로 다른 BDF, 정확한 Subsystem 매칭, 동적 레이아웃, BME/FLR 거부, 타깃과 독립된 GOP 소유권을 확인합니다. 이 합성 데이터는 실제 보드 캡처가 아닙니다.
+
+`make unlock EXPERIMENTAL=1 PROFILE=...`은 미승인 RTX 30 GA10x 캡처를 허용하지만 증거 해시, 칩·초기 상태·레이아웃·화면 소유권·DMA 안전 검사를 유지합니다. GA100·Turing·Ada·알 수 없는 칩은 후보 PCI ID를 가진 경우에도 엔진/PROM 접근 및 실험 빌드를 거부합니다. 현재 GPU-Z 정보만으로 실제 보드 프로필이나 실험용 EFI를 생성하지 않습니다. 공통 Booter/GSP 자산은 V67 실기 성공의 증거가 아닙니다.
+
 Python 패키지 검사만 실행하려면 다음 명령을 사용합니다.
 
 ```text

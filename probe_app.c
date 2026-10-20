@@ -4,6 +4,7 @@
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/GraphicsOutput.h>
 #include <Guid/FileInfo.h>
+#include "unlock/sha256.h"
 
 static EFI_GUID PciGuid = EFI_PCI_IO_PROTOCOL_GUID;
 static EFI_GUID LoadedGuid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
@@ -14,10 +15,43 @@ static EFI_GUID FileInfoGuid = EFI_FILE_INFO_ID;
 static EFI_SYSTEM_TABLE *St;
 static CHAR8 Log[32768];
 static UINTN Used;
+static BOOLEAN LogFull;
+/* Retain an absolute image pointer so the PE has a loader relocation table. */
+static CHAR16 *volatile Banner = L"\r\nRTX 30 read-only diagnostic v1\r\n";
+static VOID Hex(const CHAR8 *Key, UINT64 Value);
 
 static VOID Text(const CHAR8 *S) {
   while (*S && Used + 1 < sizeof(Log)) Log[Used++] = *S++;
+  if (*S) LogFull = TRUE;
   Log[Used] = 0;
+}
+static VOID Section(const CHAR8 *Name, UINTN Index) {
+  static const CHAR8 Digits[] = "0123456789abcdef";
+  CHAR8 Number[5];
+  UINTN I;
+  for (I = 0; I < 4; I++) Number[I] = Digits[(Index >> ((3 - I) * 4)) & 15];
+  Number[4] = 0;
+  Text("["); Text(Name); Text(":"); Text(Number); Text("]\r\n");
+}
+static VOID ConfigDump(const UINT32 *Config) {
+  static const CHAR8 Digits[] = "0123456789abcdef";
+  UINTN I;
+  for (I = 0; I < 64; I++) {
+    CHAR8 Key[] = "config_00";
+    Key[7] = Digits[(I * 4) >> 4]; Key[8] = Digits[(I * 4) & 15];
+    Hex(Key, Config[I]);
+  }
+}
+static VOID Hash(const CHAR8 *Key, const VOID *Data, UINTN Size) {
+  static const CHAR8 Digits[] = "0123456789abcdef";
+  UINT8 Digest[32];
+  CHAR8 Value[65];
+  UINTN I;
+  GuSha256(Data, Size, Digest);
+  for (I = 0; I < 32; I++) {
+    Value[I * 2] = Digits[Digest[I] >> 4]; Value[I * 2 + 1] = Digits[Digest[I] & 15];
+  }
+  Value[64] = 0; Text(Key); Text("="); Text(Value); Text("\r\n");
 }
 static VOID Hex(const CHAR8 *Key, UINT64 Value) {
   static const CHAR8 Digits[] = "0123456789abcdef";
@@ -95,7 +129,7 @@ static EFI_FILE_PROTOCOL *OpenOutput(EFI_HANDLE Image) {
   Status = Fs->OpenVolume(Fs, &Root);
   Hex("usb_open_volume_status", Status);
   if (EFI_ERROR(Status) || Root == NULL) return NULL;
-  Status = Root->Open(Root, &Parent, L"\\RTX3080-PROBE",
+  Status = Root->Open(Root, &Parent, L"\\RTX30-PROBE",
                       EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);
   Root->Close(Root);
   Hex("probe_directory_status", Status);
@@ -152,11 +186,12 @@ static VOID RecordGop(VOID) {
     EFI_GRAPHICS_OUTPUT_PROTOCOL *Gop = NULL;
     Status = St->BootServices->HandleProtocol(Handles[I], &GopGuid, (VOID **)&Gop);
     if (EFI_ERROR(Status) || !Gop || !Gop->Mode) continue;
-    Text("[GOP]\r\n"); Hex("index", I);
+    Section("GOP", I); Hex("index", I);
+    Hex("console_handle", Handles[I] == St->ConsoleOutHandle);
     Hex("mode", Gop->Mode->Mode);
     Hex("framebuffer_base", Gop->Mode->FrameBufferBase);
     Hex("framebuffer_size", Gop->Mode->FrameBufferSize);
-    if (Gop->Mode->Info) {
+    if (Gop->Mode->Info && Gop->Mode->SizeOfInfo >= sizeof(*Gop->Mode->Info)) {
       Hex("width", Gop->Mode->Info->HorizontalResolution);
       Hex("height", Gop->Mode->Info->VerticalResolution);
       Hex("pixels_per_scanline", Gop->Mode->Info->PixelsPerScanLine);
@@ -167,6 +202,27 @@ static VOID RecordGop(VOID) {
   if (Handles) St->BootServices->FreePool(Handles);
 }
 
+static VOID RecordBars(EFI_PCI_IO_PROTOCOL *Pci, UINTN Index) {
+  UINTN Bar;
+  for (Bar = 0; Bar < 6; Bar++) {
+    EFI_ACPI_ADDRESS_SPACE_DESCRIPTOR *Descriptor = NULL;
+    EFI_STATUS Status = Pci->GetBarAttributes(Pci, (UINT8)Bar, NULL, (VOID **)&Descriptor);
+    Section("BAR", Index * 8 + Bar);
+    Hex("pci_index", Index); Hex("bar_index", Bar);
+    if (!EFI_ERROR(Status)) {
+      if (!Descriptor || Descriptor->Desc != ACPI_ADDRESS_SPACE_DESCRIPTOR ||
+          Descriptor->Len < sizeof(*Descriptor) - 3 || Descriptor->AddrLen == 0)
+        Status = EFI_COMPROMISED_DATA;
+      else {
+        Hex("resource_type", Descriptor->ResType);
+        Hex("base", Descriptor->AddrRangeMin); Hex("length", Descriptor->AddrLen);
+      }
+    }
+    Hex("status", Status);
+    if (Descriptor) St->BootServices->FreePool(Descriptor);
+  }
+}
+
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table) {
   EFI_BOOT_SERVICES *Bs;
   EFI_HANDLE *Handles = NULL, SelectedHandle = NULL;
@@ -175,11 +231,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table) {
   UINTN Count = 0, I, Matches = 0;
   EFI_STATUS Status;
   PROBE_RESULT Result;
-  St = Table; Bs = St->BootServices; Used = 0; Log[0] = 0;
-  Say(L"\r\nRTX 3080 read-only diagnostic v0.1\r\n");
+  UINTN SelectedIndex = 0;
+  St = Table; Bs = St->BootServices; Used = 0; Log[0] = 0; LogFull = FALSE;
+  Say(Banner);
   Say(L"Collects BIOS and preboot state. This does not unlock the GPU.\r\n");
-  Text("RTX3080 read-only diagnostic v0.1\r\n");
-  Text("Expected PCI 10de:2206 subsystem 1462:3890\r\n");
+  Text("[REPORT]\r\n"); Hex("format", 1);
+  Text("[OUTPUT]\r\n");
   Output = OpenOutput(Image);
   Status = Bs->LocateHandleBuffer(ByProtocol, &PciGuid, NULL, &Count, &Handles);
   Hex("pci_enumeration_status", Status);
@@ -191,35 +248,42 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table) {
       Status = Bs->HandleProtocol(Handles[I], &PciGuid, (VOID **)&Pci);
       if (EFI_ERROR(Status) || Pci == NULL) continue;
       Status = Pci->Pci.Read(Pci, EfiPciIoWidthUint32, 0, 64, Config);
-      if (EFI_ERROR(Status) || (Config[0] & 0xffff) != 0x10de) continue;
-      Text("[NVIDIA PCI]\r\n");
+      if (EFI_ERROR(Status) || !ProbeMatches(Config)) continue;
+      Section("PCI", Matches);
       Status = Pci->GetLocation(Pci, &Segment, &Bus, &Device, &Function);
       Hex("location_status", Status); Hex("segment", Segment); Hex("bus", Bus);
       Hex("device", Device); Hex("function", Function);
       Hex("identity", Config[0]); Hex("class_revision", Config[2]);
       Hex("subsystem", Config[11]);
-      if (ProbeMatches(Config)) { Matches++; Selected = Pci; SelectedHandle = Handles[I]; }
+      Hex("detail_supported", ProbeSupportsDetail(Config));
+      ConfigDump(Config); PathHasUsb(Handles[I], TRUE);
+      RecordBars(Pci, Matches);
+      SelectedIndex = Matches++;
+      Selected = Pci; SelectedHandle = Handles[I];
     }
   }
   if (Handles) Bs->FreePool(Handles);
-  Hex("matching_cards", Matches);
+  Text("[SUMMARY]\r\n"); Hex("matching_cards", Matches);
   RecordGop();
-  if (Matches == 1) {
-    Say(L"Expected MSI RTX 3080 found. Reading its existing state...\r\n");
-    Text("[TARGET]\r\n"); PathHasUsb(SelectedHandle, TRUE);
+  /* Persist inventory before touching MMIO; a failed log must not start detail reads. */
+  Status = Save(Output, L"INVENTORY.TXT", Log, Used);
+  Text("[DETAIL]\r\n"); Hex("inventory_save_status", Status);
+  if (Matches == 1 && !EFI_ERROR(Status) && !LogFull) {
+    Say(L"One NVIDIA display device found. Checking read-only allowlist...\r\n");
+    Text("[TARGET]\r\n"); Hex("pci_index", SelectedIndex); PathHasUsb(SelectedHandle, TRUE);
     Status = ProbeCollect(Selected, Bs, &Result);
     Hex("collect_status", Status);
     if (!EFI_ERROR(Status)) {
-      for (I = 0; I < 64; I++) { Hex("config_offset", I * 4); Hex("value", Result.Config[I]); }
+      Hex("identity", Result.Config[0]); Hex("subsystem", Result.Config[11]);
       Hex("bar0_status", Result.BarStatus); Hex("bar0_length", Result.BarSize);
+      Hex("bar0_base", Result.BarBase);
       Hex("memory_decode_enabled", Result.MemoryEnabled);
       for (I = 0; I < PROBE_SAMPLE_COUNT; I++) {
         PROBE_SAMPLE *Sample = &Result.Samples[I];
+        Section("REG", I);
         Hex("register", Sample->Offset); Hex("status", Sample->Status); Hex("value", Sample->Value);
-        if (!EFI_ERROR(Sample->Status) &&
-            (Sample->Value == 0xffffffff || (Sample->Value & 0xffff0000U) == 0xbadf0000U))
-          Text("interpretation=inaccessible, not a valid measurement\r\n");
       }
+      Text("[DUMPS]\r\n");
       Hex("rom_image_size", Selected->RomSize);
       if (Output && ProbeRomUsable(Selected->RomImage, Selected->RomSize)) {
         Status = Save(Output, L"ROMIMAGE.BIN", Selected->RomImage, (UINTN)Selected->RomSize);
@@ -235,6 +299,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table) {
           Status = ProbeReadProm(Selected, &Result, Prom, PROBE_PROM_SIZE);
           Hex("prom_read_status", Status);
           if (!EFI_ERROR(Status) && ProbeRomUsable(Prom, PROBE_PROM_SIZE)) {
+            Hash("prom_sha256", Prom, PROBE_PROM_SIZE);
+            Hex("prom_size", PROBE_PROM_SIZE);
             Status = Save(Output, L"PROM.BIN", Prom, PROBE_PROM_SIZE);
             Hex("prom_save_status", Status);
           } else Text("prom=not saved (read error or no 55aa ROM signature)\r\n");
@@ -243,16 +309,16 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table) {
       }
     }
   } else {
-    Text("target=missing or ambiguous; no GPU MMIO or ROM reads attempted\r\n");
-    Say(L"Expected card missing or ambiguous. No GPU MMIO reads attempted.\r\n");
+    Text("[SKIPPED]\r\nreason=missing/ambiguous target or unavailable inventory log\r\n");
+    Say(L"Detail reads skipped: target ambiguous/missing or log unavailable.\r\n");
   }
-  Text("GPU writes=none; GPU resets=none; boot-variable changes=none\r\n");
-  Status = Save(Output, L"REPORT.TXT", Log, Used);
+  Text("[END]\r\ngpu_writes=none\r\ngpu_resets=none\r\nboot_variable_changes=none\r\n");
+  Status = LogFull ? EFI_BUFFER_TOO_SMALL : Save(Output, L"REPORT.TXT", Log, Used);
   if (Output) Output->Close(Output);
   if (EFI_ERROR(Status)) {
     Say(L"Could not save report. Diagnostic details follow:\r\n");
     Hex("report_save_status", Status); ShowLog();
-  } else Say(L"Saved: USB \\RTX3080-PROBE\\RUNxx\\REPORT.TXT and available BIOS copies.\r\n");
+  } else Say(L"Saved: USB \\RTX30-PROBE\\RUNxx\\REPORT.TXT and available BIOS copies.\r\n");
   Say(L"Returning in 15 seconds. Choose Windows Boot Manager if a boot menu appears.\r\n");
   Bs->Stall(15000000);
   return EFI_SUCCESS;

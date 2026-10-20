@@ -7,6 +7,23 @@
 #define GU_CAP_LIMIT ((GU_CONFIG_BYTES - GU_CAP_START) / 4U)
 #define GU_MSIX_ID 0x11U
 
+BOOLEAN GuIndependentDisplay(EFI_BOOT_SERVICES *Bs, EFI_PCI_IO_PROTOCOL *Target,
+                            EFI_HANDLE TargetHandle, EFI_DEVICE_PATH_PROTOCOL *Path) {
+  EFI_GUID Guid=EFI_PCI_IO_PROTOCOL_GUID;
+  EFI_HANDLE Handle=NULL;EFI_PCI_IO_PROTOCOL *Pci=NULL;
+  EFI_DEVICE_PATH_PROTOCOL *Remaining=Path;
+  UINT32 Config[3];UINTN Segment,Bus,Device,Function,Ts,Tb,Td,Tf;
+  if(!Bs || !Target || !Path || !Bs->LocateDevicePath ||
+     EFI_ERROR(Bs->LocateDevicePath(&Guid,&Remaining,&Handle)) || !Handle || Handle==TargetHandle ||
+     EFI_ERROR(Bs->HandleProtocol(Handle,&Guid,(VOID **)&Pci)) || !Pci || Pci==Target ||
+     EFI_ERROR(Pci->Pci.Read(Pci,EfiPciIoWidthUint32,0,3,Config)) ||
+     (Config[2]>>24)!=3 || !(Config[0]&0xffffU) || (Config[0]&0xffffU)==0xffffU ||
+     EFI_ERROR(Pci->GetLocation(Pci,&Segment,&Bus,&Device,&Function)) ||
+     EFI_ERROR(Target->GetLocation(Target,&Ts,&Tb,&Td,&Tf)))return FALSE;
+  return Segment<=65535 && Bus<=255 && Device<=31 && Function<=7 &&
+         (Segment!=Ts || Bus!=Tb || Device!=Td || Function!=Tf);
+}
+
 static UINT8 ConfigByte(const UINT32 Config[64], UINTN Offset) {
   return (UINT8)(Config[Offset / 4U] >> ((Offset & 3U) * 8U));
 }
@@ -26,7 +43,9 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
 
   if (Out == NULL) return FALSE;
   *Out = Caps;
-  if (Config == NULL || Segment != 0 || Bus != 1 || Device != 0 || Function != 0)
+  if (Config == NULL || (GU_PROFILE_BUILD ?
+      Segment > 65535 || Bus > 255 || Device > 31 || Function > 7 :
+      Segment != 0 || Bus != 1 || Device != 0 || Function != 0))
     return FALSE;
   if (Config[0] != GU_BOARD_ID || Config[0x2c / 4] != GU_BOARD_SUBSYSTEM ||
       ConfigByte(Config, 0x0b) != PCI_CLASS_DISPLAY ||

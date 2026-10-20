@@ -4,9 +4,20 @@
 #include <Protocol/DevicePath.h>
 #include <stddef.h>
 
+#ifndef GU_PROFILE_BUILD
+#define GU_PROFILE_BUILD 0
+#endif
+#ifndef GU_BOARD_ID
 #define GU_BOARD_ID 0x220610deU
 #define GU_BOARD_SUBSYSTEM 0x38901462U
 #define GU_BOARD_CHIP 0xb72000a1U
+#define GU_PROM_SHA256 "f3dc8f07b0b8c9856d192df172dfa7f7f84ac17ef6edfdb448ad7fa94efd2789"
+#define GU_INITIAL_PLM 0xffffff8fU
+#define GU_INITIAL_SS0 0x46254040U
+#define GU_INITIAL_SS1 0U
+#define GU_FB_MIB 0x2800U
+#define GU_BAR_SIZE 0x1000000ULL
+#endif
 typedef struct GU_DMA GU_DMA;
 struct GU_DMA {
   GU_DMA *next;

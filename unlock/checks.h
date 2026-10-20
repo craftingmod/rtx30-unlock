@@ -15,3 +15,7 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
    MaxBytes is a read bound, not necessarily the exact allocation length.
    Returns 1 for the Intel route, 2 for the RTX route, and 0 otherwise. */
 int GuDisplayPath(const EFI_DEVICE_PATH_PROTOCOL *Path, UINTN MaxBytes);
+
+/* Resolve GOP ownership to a distinct live PCI display function. No writes. */
+BOOLEAN GuIndependentDisplay(EFI_BOOT_SERVICES *Bs, EFI_PCI_IO_PROTOCOL *Target,
+                            EFI_HANDLE TargetHandle, EFI_DEVICE_PATH_PROTOCOL *Path);
