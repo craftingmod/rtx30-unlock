@@ -75,4 +75,6 @@ GOP v14의 Windows 파일 탐색·이미지 로드·실행 인계 모의 검사 
 
 GOP v15 production 경로는 `experiments/gop/test-production.cmd`로 검사한다. 실제 앱의 U 없는 시작 게이트, DEBUG.ON 유무에 따른 로그 선택과 쓰기 오류 검사, 실제 자산 IO의 기본 무생성/무쓰기/무Flush, 디버그 보고서 유지와 자산·정리 실패 처리를 모의 서비스로 확인한다. Windows 인계 검사에는 무로그 상태에서 검증 성공 시 실행 및 검증 실패 시 실행 차단을 포함한다. 실제 USB 자동 부팅 시간·SSD EFI 설치는 검사하지 않는다.
 
-GOP v16은 `experiments/gop/test-ssd.cmd`로 실제 셀렉터 읽기 정책 6개와 기존 적용 후 관측 10개, 실제 자산 IO의 GPT ESP 허용/일반 파티션·프로토콜 부재·잘못된 revision 거부, 실제 앱의 스킵/적용/사전 실패/transaction 실패 흐름 4개를 검사한다. SS0가 적용값일 때 GOP 계획·실제 적용 호출 없이 Windows로 이어지고, 예상 외 값은 스킵하지 않는지 확인한다. GPU·펌웨어 실행은 모의 처리하며 SSD에 쓰지 않는다.
+GOP v16/v17은 `experiments/gop/test-ssd.cmd`로 실제 셀렉터 읽기 정책 6개와 기존 적용 후 관측 10개, 실제 자산 IO의 GPT ESP 허용/일반 파티션·프로토콜 부재·잘못된 revision 거부, 실제 앱 흐름 9개를 검사한다. SS0 스킵/적용, 사전/transaction 실패, DEBUG.ON의 U 승인·Esc·시간 초과 및 스킵 시 승인도 검사한다. GPU·펌웨어 실행은 모의 처리하며 SSD에 쓰지 않는다.
+
+v17은 `experiments/gop/test-external-profile.cmd`로 Python이 검증·생성한 5개 GA10x 프로필을 **같은 C 실행 파일**에서 읽는다. 매 바이트 손상/잘림, 길이/버전/칩/PCI/BAR/FB/MMU/WPR2 오류, 파일 metadata/read/Close 오류와 추가 데이터 거부를 확인하고 실제 PCI/SubSystem/BDF/FLR·레이아웃 검사를 재사용한다. 실제 v17 앱 진입점의 프로필 필수 검사·무로그 자동 진행·DEBUG.ON의 U/Esc/시간 초과·스킵 승인 흐름 8개도 모의 검사한다. `tools/test_runtime_profile.py`는 캡처 대조와 wire 형식을, `tools/test_gop_experiment.py`는 EFI 바이트를 그대로 유지한 프로필 교체·DEBUG.ON 포함·잘못된 입력의 패키지 미생성을 확인한다. 상세 형식과 실기 미검증 범위는 [외부 프로필](docs/EXTERNAL-PROFILE.md)을 참고한다.

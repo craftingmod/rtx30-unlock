@@ -8,7 +8,11 @@
 #ifdef GC_WINDOWS_HANDOFF
 #include "windows.h"
 #ifdef GC_PRODUCTION
-#ifdef GU_SSD_EXPERIMENT
+#ifdef GU_RUNTIME_PROFILE_BUILD
+#include "../../unlock/runtime_profile.h"
+#define GC_DIAG "v17-external-profile"
+#define GC_DIAG_WIDE L"v17-external-profile"
+#elif defined(GU_SSD_EXPERIMENT)
 #define GC_DIAG "v16-ssd-selectors"
 #define GC_DIAG_WIDE L"v16-ssd-selectors"
 #else
@@ -78,6 +82,9 @@ static VOID ShowFailure(const char *stage,EFI_STATUS status) {
   Say(L"\r\nStatus: ");Say(number);
   Say(L"Check USB RTX30-GOP-TEST/RUNxx/REPORT.TXT.\r\n"
     L"For usb-log failure, copy the entire package including RTX30-GOP-TEST.\r\n"
+#ifdef GU_RUNTIME_PROFILE_BUILD
+    L"PROFILE.BIN must be valid in RTX30-GOP-TEST on this EFI volume.\r\n"
+#endif
 #ifdef GC_PRODUCTION
     L"Automatic boot stopped. Power off physically.\r\n");
 #else
@@ -106,6 +113,10 @@ static EFI_STATUS OpenLog(EFI_HANDLE image) {
   union {EFI_FILE_INFO info;UINT8 bytes[512];} metadata;UINTN size=sizeof(metadata);
   status=parent->GetInfo(parent,&InfoGuid,&size,&metadata);
   if(EFI_ERROR(status) || size<SIZE_OF_EFI_FILE_INFO || !(metadata.info.Attribute&EFI_FILE_DIRECTORY))return CloseFile(parent,EFI_UNSUPPORTED);
+#ifdef GU_RUNTIME_PROFILE_BUILD
+  status=GuProfileLoad(parent);
+  if(EFI_ERROR(status))return CloseFile(parent,status);
+#endif
 #ifdef GC_PRODUCTION
   EFI_FILE_PROTOCOL *debug=NULL;
   status=parent->Open(parent,&debug,L"DEBUG.ON",EFI_FILE_MODE_READ,0);
@@ -153,8 +164,8 @@ static EFI_STATUS Target(GC_CONTEXT *c) {
 #ifndef GC_TREE_ONLY
 static EFI_STATUS Approve(VOID) {
 #ifdef GC_PRODUCTION
-  return Say(L"Automatic unlock and Windows boot. Please wait.\r\n");
-#else
+  if(Quiet)return Say(L"Automatic unlock and Windows boot. Please wait.\r\n");
+#endif
   if(!Table->ConIn || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
   EFI_STATUS status=Table->ConIn->Reset(Table->ConIn,FALSE);if(EFI_ERROR(status))return status;
   status=Say(
@@ -193,7 +204,7 @@ static EFI_STATUS Approve(VOID) {
 #else
     L"After recovery, visually check the screen and power off; do not run Unlock in this boot.\r\n"
 #endif
-    L"Press U once for one detach/reconnect; Esc or 30 seconds cancels.\r\n");
+    L"Press U once to proceed; Esc or 30 seconds cancels.\r\n");
   if(EFI_ERROR(status))return status;
   for(UINTN i=0;i<300;i++) {
     EFI_INPUT_KEY key;status=Table->ConIn->ReadKeyStroke(Table->ConIn,&key);
@@ -204,7 +215,6 @@ static EFI_STATUS Approve(VOID) {
     Table->BootServices->Stall(100000);
   }
   return EFI_TIMEOUT;
-#endif
 }
 static VOID Halt(VOID) {
   /* No stale console access or automatic boot continuation after uncertain recovery. */
@@ -228,7 +238,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #endif
   GC_RESULT result={0};
 #endif
-  const char *stage="usb-log";
+  const char *stage=
+#ifdef GU_RUNTIME_PROFILE_BUILD
+    "boot-volume/log/profile";
+#else
+    "usb-log";
+#endif
   EFI_STATUS status=OpenLog(image);
   if(EFI_ERROR(status)){if(Report)Report->Close(Report);Report=NULL;ShowFailure(stage,status);
 #ifdef GC_PRODUCTION
@@ -256,6 +271,12 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
     )) {
     status=EFI_DEVICE_ERROR;goto finish;
   }
+#ifdef GU_RUNTIME_PROFILE_BUILD
+  if(!Log("PROFILE v1 loaded: PCI=%08x subsystem=%08x chip=%08x FB=%u MiB PROM=%s\n",
+     GuProfile.identity,GuProfile.subsystem,GuProfile.chip,GuProfile.fb_mib,GuProfile.prom_sha256)){
+    status=EFI_DEVICE_ERROR;goto finish;
+  }
+#endif
   stage="console";status=Say(Banner);
   if(!Log("STAGE console status=%#llx\n",(unsigned long long)status)){status=EFI_DEVICE_ERROR;goto finish;}
   if(EFI_ERROR(status))goto finish;
@@ -293,7 +314,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #ifdef GC_FULL_UNLOCK
   status=Say(
 #ifdef GC_PRODUCTION
-    L"Checking board state and firmware assets. Automatic Windows boot follows.\r\n"
+    L"Checking board state and firmware assets. DEBUG.ON requires U before proceeding.\r\n"
 #else
     L"Verifying captured board state and five firmware assets before U. Please wait.\r\n"
 #endif
@@ -307,6 +328,13 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #ifdef GC_WINDOWS_HANDOFF
   stage="windows-preflight";status=GwPrepare(&context,&windows);if(status!=EFI_SUCCESS)goto finish;
 #endif
+  stage="start-gate";status=Approve();if(EFI_ERROR(status))goto finish;
+  BOOLEAN manual=TRUE;
+#ifdef GC_PRODUCTION
+  manual=!Quiet;
+#endif
+  if(!Log(manual?"MANUAL_U confirmed; proceeding with one planned operation\n":
+      "AUTO_START: all preflight checks passed; proceeding once\n")){status=EFI_DEVICE_ERROR;goto finish;}
 #ifdef GU_SSD_EXPERIMENT
   if(GxAlreadyApplied()){
     if(!Log("PATCH_SKIP: SS0=88888888; no assets, detach, firmware, FLR or SetMode\n"))goto stop;
@@ -316,24 +344,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
     goto handoff;
   }
 #endif
-  stage="start-gate";status=Approve();if(EFI_ERROR(status))goto finish;
-  if(!Log(
-#ifdef GC_PRODUCTION
-    "AUTO_START: all preflight checks passed; one unlock and Windows handoff\n"
-#elif defined(GC_FULL_UNLOCK)
-    "MANUAL_U confirmed for full GOP release and real unlock including one FLR\n"
-#else
-    "MANUAL_U confirmed for full GOP release and one FLR\n"
-#endif
-    )){status=EFI_DEVICE_ERROR;goto finish;}
 #ifdef GC_FULL_UNLOCK
-  if(!GvMark(&context,
-#ifdef GC_PRODUCTION
-    "auto-start"
-#else
-    "manual-u"
-#endif
-    )){status=EFI_DEVICE_ERROR;goto finish;}
+  if(!GvMark(&context,manual?"manual-u":"auto-start")){status=EFI_DEVICE_ERROR;goto finish;}
 #endif
   stage="full-stop-flr-restore";status=GfRun(&context,approved,&result);
   Log("FULL_FINAL status=%#llx touched=%u restored=%u\n",(unsigned long long)status,result.touched,result.restored);

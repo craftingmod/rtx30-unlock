@@ -170,8 +170,13 @@ int main(void){
   Setup();char big[600];memset(big,'x',599);big[599]=0;assert(!Log("%s",big) && !Writes && !Outputs);
 #ifndef GC_TREE_ONLY
 #ifdef GC_PRODUCTION
-  Setup();System.ConIn=NULL;assert(Approve()==EFI_SUCCESS && !Polls);
-  Setup();OutputStatus=EFI_DEVICE_ERROR;assert(Approve()==EFI_DEVICE_ERROR && !Polls);
+  Setup();Quiet=TRUE;System.ConIn=NULL;assert(Approve()==EFI_SUCCESS && !Polls);
+  Setup();Quiet=TRUE;OutputStatus=EFI_DEVICE_ERROR;assert(Approve()==EFI_DEVICE_ERROR && !Polls);
+  Setup();assert(Approve()==EFI_SUCCESS && Polls==1);
+  Setup();Key=0x1b;assert(Approve()==EFI_ABORTED && Polls==1);
+  Setup();InputStatus=EFI_NOT_READY;assert(Approve()==EFI_TIMEOUT && Polls==300);
+  Setup();InputStatus=EFI_DEVICE_ERROR;assert(Approve()==EFI_DEVICE_ERROR && Polls==1);
+  Setup();System.ConIn=NULL;assert(Approve()==EFI_UNSUPPORTED && !Polls);
   Startup();Report=NULL;DebugMarker=FALSE;assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_SUCCESS && Quiet && !Report && !Writes);
   assert(Log("quiet\n") && !Writes && !Flushes);
   Startup();Report=NULL;DebugOpenError=TRUE;

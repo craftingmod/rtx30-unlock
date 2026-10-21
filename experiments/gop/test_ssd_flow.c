@@ -18,14 +18,17 @@ EFI_STATUS GfRun(GC_CONTEXT *c,const GF_PLAN *p,GC_RESULT *r){(void)c;(void)p;Ru
 EFI_STATUS GwPrepare(GC_CONTEXT *c,GW_PLAN *p){(void)c;p->image=(EFI_HANDLE)(UINTN)99;return EFI_SUCCESS;}
 EFI_STATUS GwCancel(GC_CONTEXT *c,GW_PLAN *p){(void)c;(void)p;return EFI_SUCCESS;}
 EFI_STATUS GwStart(GC_CONTEXT *c,GW_PLAN *p,EFI_FILE_PROTOCOL **f,BOOLEAN verified){
-  assert(c->quiet && p->image && !*f && verified);Starts++;longjmp(ExitFlow,1);return EFI_ABORTED;
+  assert(p->image && verified && (c->quiet?!*f:*f!=NULL));Starts++;longjmp(ExitFlow,1);return EFI_ABORTED;
 }
 static EFI_STATUS EFIAPI FlowStall(UINTN n){if(n==1000000)longjmp(ExitFlow,2);return EFI_SUCCESS;}
 static void SetupFlow(void){
   Startup();DebugMarker=FALSE;SecureEnabled=0;Services.Stall=FlowStall;
   Plans=Runs=Finishes=Starts=0;PreflightStatus=RunStatus=EFI_SUCCESS;
 }
-int main(void){
+#ifndef SSD_FLOW_MAIN
+#define SSD_FLOW_MAIN main
+#endif
+int SSD_FLOW_MAIN(void){
   SetupFlow();Skip=TRUE;if(!setjmp(ExitFlow))efi_main((EFI_HANDLE)(UINTN)77,&System);
   assert(Starts==1 && !Plans && !Runs && Finishes==1 && !Writes && !Polls);
   SetupFlow();Skip=FALSE;if(!setjmp(ExitFlow))efi_main((EFI_HANDLE)(UINTN)77,&System);
@@ -34,5 +37,15 @@ int main(void){
   assert(!Starts && !Plans && !Runs && Finishes==1);
   SetupFlow();Skip=FALSE;RunStatus=EFI_DEVICE_ERROR;if(!setjmp(ExitFlow))efi_main((EFI_HANDLE)(UINTN)77,&System);
   assert(!Starts && Plans==1 && Runs==1);
-  puts("PASS 4 actual SSD app flows: skip leaves GOP untouched; apply once; preflight/transaction failures do not boot Windows");return 0;
+  SetupFlow();Skip=FALSE;DebugMarker=TRUE;if(!setjmp(ExitFlow))efi_main((EFI_HANDLE)(UINTN)77,&System);
+  assert(Starts==1 && Plans==1 && Runs==1 && Polls==1 && strstr(SavedLog,"MANUAL_U"));
+  SetupFlow();Skip=FALSE;DebugMarker=TRUE;Key=0x1b;if(!setjmp(ExitFlow))efi_main((EFI_HANDLE)(UINTN)77,&System);
+  assert(!Starts && !Runs && Polls==1);
+  SetupFlow();Skip=FALSE;DebugMarker=TRUE;InputStatus=EFI_NOT_READY;if(!setjmp(ExitFlow))efi_main((EFI_HANDLE)(UINTN)77,&System);
+  assert(!Starts && !Runs && Polls==300);
+  SetupFlow();Skip=TRUE;DebugMarker=TRUE;Key=0x1b;if(!setjmp(ExitFlow))efi_main((EFI_HANDLE)(UINTN)77,&System);
+  assert(!Starts && !Plans && !Runs && Polls==1);
+  SetupFlow();Skip=TRUE;DebugMarker=TRUE;if(!setjmp(ExitFlow))efi_main((EFI_HANDLE)(UINTN)77,&System);
+  assert(Starts==1 && !Plans && !Runs && Polls==1);
+  puts("PASS 9 actual SSD flows: auto/debug U, Esc/timeout stop apply and skip, preflight/transaction failures block Windows");return 0;
 }

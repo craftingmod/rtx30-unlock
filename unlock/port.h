@@ -3,6 +3,9 @@
 #include <Protocol/PciIo.h>
 #include <Protocol/DevicePath.h>
 #include <stddef.h>
+#ifdef GU_RUNTIME_PROFILE_BUILD
+#include "runtime_profile.h"
+#endif
 
 #ifndef GU_PROFILE_BUILD
 #define GU_PROFILE_BUILD 0

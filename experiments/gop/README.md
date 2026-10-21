@@ -1,6 +1,24 @@
 # NVIDIA GOP 해제·복구 실험 1
 
-## 현재 실험: v16-ssd-selectors (실기 미검증)
+## 다음 실험: v17-external-profile (실기 미검증)
+
+공통 EFI가 실행 볼륨의 `RTX30-GOP-TEST/PROFILE.BIN`을 읽는 구현을 추가했다. JSON은 PC에서 원본 Probe REPORT/PROM과 대조한 뒤 고정 길이 파일로 변환한다. 기존 v16 EFI는 외부 파일을 읽지 못하므로 v17로 한 번 교체한다. 이후 기존 GA10x 공통 절차 안에서는 EFI 재빌드 없이 프로필을 교체할 수 있다. [빌드·패키지·프로필 교체·검증 범위](../../docs/EXTERNAL-PROFILE.md)를 참고한다.
+
+새 소스에서 빌드하는 production 모드는 `DEBUG.ON`이 있으면 상세 로그와 **U 키 승인**을 요구한다. Esc·30초 시간 초과·입력 오류는 적용/스킵 및 Windows 자동 부팅을 중단한다. DEBUG.ON이 없으면 기존처럼 자동 진행한다. 기존에 배포된 v16 파일의 동작은 변경되지 않는다. 아래 v16 기록의 무조건 자동 실행 설명은 당시 배포 파일을 가리킨다.
+
+## 이전 실험: v16-ssd-selectors (적용 경로 실기 성공)
+
+### SSD 실행 피드백: 예상 외 초기 SS0에서 적용·복구·Windows 부팅 성공
+
+2026-10-21 사용자는 정상 부팅과 적용을 확인했고, 제공한 두 로그도 완료 상태다. `SELECTOR_PREFLIGHT SS0=24700051 SS1=00000006 skip=0 relaxed_initial_selectors=1 status=0`에서 기존 캡처와 다른 초기 SS0를 거부하지 않고 실제 적용 경로를 탔다. PROM·다섯 자산 해시 검사를 통과한 뒤 SS0 `24700051→88888888`, SS1 `6→8` 쓰기와 읽기 확인이 성공했다.
+
+`PATCH_TRANSACTION result=0 containment=0 started=1 quiesced=1 fault=0 retained=0 maps=0 FLR=1 safe=1`로 단일 FLR·DMA 정리를 확인했다. GOP 자식 2개와 모든 역할 복구, mode 1(640×480)→원래 mode 0 복귀, 녹색 9,216픽셀 읽기 불일치 0도 성공했다. before-gop부터 after-output까지 모든 단계에서 셀렉터 `88888888 / 8`이 유지됐고, `FULL_FINAL status=0 touched=1 restored=1`, `PATCH_LOG_CLOSE status=0`, `END`, 마지막 `WINDOWS_START_INTENT ... reboot=0`까지 기록됐다. Windows 진입은 사용자 확인이며 로그 자체는 StartImage 직전까지만 남긴다.
+
+상세 로그를 켠 상태에서 RTC 기준 preflight-begin 0ms→report-complete 9000ms로 **약 9초**, auto-start 1000ms 이후로는 약 8초다. 자산 시작/끝은 모두 1000ms로 같은 RTC 초 안에 기록돼, 정확한 읽기·해시 소요 시간을 0ms라고 해석하지 않는다. 이전 v14 USB에서는 자산 구간 102초, U 이후 보고 완료 227초였다. 이 실행은 SSD에서도 상세 로그를 정상 저장하며 완료 시간이 크게 줄어든 결과다. 세부 속도 향상의 원인별 비율이나 반복 실행 시간은 아직 측정하지 않았다.
+
+이번에는 `skip=0`인 적용 경로를 검증했다. SS0가 이미 `88888888`일 때의 실기 스킵 경로, 디버그 파일 없는 기본 무로그 실행, v16 이후 CUDA 성능 및 반복 안정성은 별도 검증 대상이다. 원본 두 파일은 `captures/v16-ssd-result/GOP.TXT`, `REPORT.TXT`에 보존하고 사용자 파일과 SHA256 일치를 확인했다.
+
+### 빌드 동작 및 시험 방법
 
 사용자 요청에 따라 **SSD EFI 지원**과 **초기 SS0 기반 스킵/시도** 정책을 별도 `-SsdExperiment` 빌드에 적용한다. 이 옵션은 `-FullUnlock -WindowsHandoff -Production`과 함께 사용한다. 기본 자동 실행·DEBUG.ON 선택 로깅을 유지한다. 기존 v15 빌드의 USB 전용·초기 셀렉터 기대값 검사는 옵션을 생략하면 그대로다.
 
@@ -17,7 +35,7 @@ python tools/package_gop_experiment.py --output build/gop-experiment-v16-ssd-sel
 
 I: SSD EFI 시험에서는 패키지의 `EFI/BOOT/BOOTX64.EFI`를 해당 경로에 교체하고 `RTX30-GOP-TEST`, `RTX3080-UNLOCK/ASSETS`는 EFI를 실행할 볼륨의 루트에 둔다. 기존 `RTX30-GOP-TEST/DEBUG.ON`과 과거 RUN은 보존한다. 첫 시험은 DEBUG.ON을 켠 상태로 진행한다. 부팅 화면에서 **v16-ssd-selectors**, `Boot source accepted. Logging ON`을 확인한다. 키 입력 없이 적용/스킵 뒤 Windows로 이어진다. 새 두 REPORT와 Windows 수집 결과로 어느 경로가 실행됐는지 확인한다. 새 NVRAM 항목 등록이나 Windows Boot Manager 파일 변경은 이 빌드/패키지 생성에 포함하지 않는다.
 
-현재 I:에 실제 파일을 설치하거나 재부팅하지 않았으며, SSD PartitionInfo 제공 여부·실행 시간·예상 외 초기값에서의 적용 성공은 실기 미검증이다. 중단 시 전원 종료 후 로그를 회수하며 같은 부팅에서 재시도하지 않는다.
+빌드 준비 시에는 I:에 파일을 설치하거나 재부팅하지 않았다. 이후 사용자 실행에서 SSD 부팅·예상 외 초기값의 적용 성공과 실행 시간을 위와 같이 확인했다. 중단 시 전원 종료 후 로그를 회수하며 같은 부팅에서 재시도하지 않는다.
 
 ## 이전 빌드: v15-auto-windows (production 옵션, 실기 미검증)
 

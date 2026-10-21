@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / 'unlock'))
 from verify_pe import inspect
 
 
-def package(output, root=ROOT, assets=None):
+def package(output, root=ROOT, assets=None, profile=None):
     root = Path(root).resolve()
     output = Path(output).absolute()
     if output.exists() or output.is_symlink() or not output.parent.is_dir():
@@ -36,8 +36,12 @@ def package(output, root=ROOT, assets=None):
     if mode == 'full-unlock':
         required.update({'unlock/app.c', 'unlock/app_io.c', 'unlock/port.c', 'unlock/assets.json',
                          'unlock/vendor/unlock_610.c', 'experiments/gop/patch.h',
-                         'experiments/gop/visual.c', 'experiments/gop/visual.h',
-                         'build/gop-experiment/profile.h', 'build/gop-experiment/board.json'})
+                         'experiments/gop/visual.c', 'experiments/gop/visual.h'})
+        if manifest.get('ExternalProfile'):
+            required.update({'unlock/runtime_profile.c', 'unlock/runtime_profile.h',
+                             'tools/runtime_profile.py'})
+        else:
+            required.update({'build/gop-experiment/profile.h', 'build/gop-experiment/board.json'})
     elif assets is not None:
         raise ValueError('Firmware assets are only used by full-unlock mode')
     if manifest.get('WindowsHandoff'):
@@ -55,6 +59,17 @@ def package(output, root=ROOT, assets=None):
         if not manifest.get('Production') or not manifest.get('WindowsHandoff') or mode != 'full-unlock':
             raise ValueError('SSD experiment requires production Windows handoff')
         required.update({'unlock/boot_source.h', 'experiments/gop/test-ssd.cmd', 'experiments/gop/test_ssd_flow.c'})
+    profile_data = None
+    if manifest.get('ExternalProfile'):
+        if not manifest.get('SsdExperiment'):
+            raise ValueError('External profile requires the SSD experiment flow')
+        if profile is None:
+            raise ValueError('External-profile package requires --profile board.json')
+        from runtime_profile import encode
+        from check_profile import check
+        profile_data = encode(check(profile, experimental=True))
+    elif profile is not None:
+        raise ValueError('--profile requires an external-profile EFI')
     if not required.issubset({entry['Path'] for entry in sources}):
         raise ValueError('Incomplete experiment source manifest')
     with tempfile.TemporaryDirectory(prefix='.gop-stage-', dir=output.parent) as temporary:
@@ -71,8 +86,16 @@ def package(output, root=ROOT, assets=None):
                 'Production: automatic unlock and Windows handoff after checks.\n'
                 'The SSD experiment build also accepts GPT EFI System Partitions.\n'
                 'No RUN folders or reports are created by default.\n'
-                'Create an empty DEBUG.ON in this directory to enable detailed reports.\n'
+                'Create an empty DEBUG.ON in this directory for detailed reports and manual U approval.\n'
                 'Remove DEBUG.ON after diagnosis to stop log accumulation.\n', encoding='utf-8')
+        if profile_data is not None:
+            (marker / 'PROFILE.BIN').write_bytes(profile_data)
+            # First experiments ship with reports and explicit approval enabled.
+            (marker / 'DEBUG.ON').touch()
+            with (marker / 'README.txt').open('a', encoding='utf-8') as instructions:
+                instructions.write('v17: PROFILE.BIN is mandatory on this EFI volume. Missing/invalid profiles stop before GPU detach.\n'
+                                   'Replace PROFILE.BIN with tools/runtime_profile.py output for another captured environment.\n'
+                                   'DEBUG.ON is included for the first test; U is required even on the already-applied skip path.\n')
         shutil.copyfile(build / 'BOOTX64.EFI', boot / 'BOOTX64.EFI')
         if mode == 'full-unlock':
             asset_target = stage / 'RTX3080-UNLOCK/ASSETS'
@@ -155,11 +178,12 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True)
     parser.add_argument('--zip', help='Also write and verify this new ZIP file')
     parser.add_argument('--assets', type=Path, help='Verified firmware folder for full-unlock mode')
+    parser.add_argument('--profile', type=Path, help='Checked board.json to ship with a common external-profile EFI')
     args = parser.parse_args()
     try:
         if args.zip and (Path(args.zip).exists() or Path(args.zip).is_symlink()):
             raise ValueError('ZIP output already exists')
-        prepared = package(args.output, assets=args.assets)
+        prepared = package(args.output, assets=args.assets, profile=args.profile)
         print('Prepared ' + str(prepared))
         if args.zip:
             print('Verified ZIP ' + str(archive(prepared, args.zip)))

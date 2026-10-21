@@ -6,9 +6,29 @@ import unittest
 import zipfile
 
 from package_gop_experiment import ROOT, package, archive
+from probe_profile import generate
+from test_probe_profile import PROM, report
 
 
 class GopPackage(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.fixture = Path(temp.name)
+        self.profile_options = {}
+        manifest = ROOT / 'build/gop-experiment/build-manifest.json'
+        if manifest.exists() and json.loads(manifest.read_text(encoding='utf-8-sig')).get('ExternalProfile'):
+            self.profile_options = {'profile': self.make_profile()}
+
+    def make_profile(self, identity=0x220310de, chip=0xb72000a1, mib=24576):
+        capture = self.fixture / 'REPORT.TXT'
+        prom = self.fixture / 'PROM.BIN'
+        capture.write_text(report(identity, chip=chip, fb_mib=mib), encoding='ascii')
+        prom.write_bytes(PROM)
+        profile = self.fixture / 'board.json'
+        profile.write_text(json.dumps(generate(capture, prom)), encoding='utf-8')
+        return profile
+
     def test_existing_output_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
             marker = Path(directory) / 'keep.txt'
@@ -29,7 +49,7 @@ class GopPackage(unittest.TestCase):
                          'Build GOP experiment first')
     def test_package_includes_matching_efi_and_rebuildable_sources(self):
         with tempfile.TemporaryDirectory() as directory:
-            output = package(Path(directory) / 'usb')
+            output = package(Path(directory) / 'usb', **self.profile_options)
             self.assertTrue((output / 'RTX30-GOP-TEST').is_dir())
             self.assertTrue((output / 'RTX30-GOP-TEST/README.txt').is_file())
             manifest = json.loads((output / 'build-manifest.json').read_text(encoding='utf-8-sig'))
@@ -38,7 +58,9 @@ class GopPackage(unittest.TestCase):
                 self.assertTrue((output / 'RTX3080-UNLOCK/ASSETS/README.txt').is_file())
             if manifest.get('Production'):
                 self.assertIn('DEBUG.ON', (output / 'RTX30-GOP-TEST/README.txt').read_text())
-                self.assertFalse((output / 'RTX30-GOP-TEST/DEBUG.ON').exists())
+                self.assertEqual((output / 'RTX30-GOP-TEST/DEBUG.ON').exists(), bool(manifest.get('ExternalProfile')))
+            if manifest.get('ExternalProfile'):
+                self.assertEqual((output / 'RTX30-GOP-TEST/PROFILE.BIN').stat().st_size, 176)
             if manifest.get('WindowsHandoff'):
                 for source, name in (('experiments/gop/windows-check.ps1', 'check.ps1'),
                                      ('analysis/compute-benchmark.cu', 'compute-benchmark.cu'),
@@ -97,7 +119,7 @@ class GopPackage(unittest.TestCase):
                 if invalid != 'missing':
                     (assets / first['Name']).write_bytes(b'x' * (first['Bytes'] if invalid == 'wrong-hash' else 1))
                 with self.assertRaises((OSError, ValueError)):
-                    package(root / 'usb', assets=assets)
+                    package(root / 'usb', assets=assets, **self.profile_options)
                 self.assertFalse((root / 'usb').exists())
                 self.assertFalse(list(root.glob('.gop-stage-*')))
 
@@ -128,9 +150,27 @@ class GopPackage(unittest.TestCase):
                 manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
                 output = root / 'usb'
                 with self.assertRaises(ValueError):
-                    package(output, root)
+                    package(output, root, **self.profile_options)
                 self.assertFalse(output.exists())
                 self.assertFalse(list(root.glob('.gop-stage-*')))
+
+    def test_external_profiles_change_without_rebuilding_efi(self):
+        if not self.profile_options:
+            self.skipTest('Build external-profile mode first')
+        with tempfile.TemporaryDirectory() as directory:
+            first = package(Path(directory) / 'first', **self.profile_options)
+            second_profile = self.make_profile(0x248410de, 0xb74000a1, 8192)
+            second = package(Path(directory) / 'second', profile=second_profile)
+            self.assertEqual((first / 'EFI/BOOT/BOOTX64.EFI').read_bytes(),
+                             (second / 'EFI/BOOT/BOOTX64.EFI').read_bytes())
+            self.assertNotEqual((first / 'RTX30-GOP-TEST/PROFILE.BIN').read_bytes(),
+                                (second / 'RTX30-GOP-TEST/PROFILE.BIN').read_bytes())
+            with self.assertRaisesRegex(ValueError, 'requires --profile'):
+                package(Path(directory) / 'missing')
+            second_profile.write_text('{}', encoding='utf-8')
+            with self.assertRaises(ValueError):
+                package(Path(directory) / 'invalid', profile=second_profile)
+            self.assertFalse((Path(directory) / 'invalid').exists())
 
 
 if __name__ == '__main__':
