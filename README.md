@@ -2,9 +2,16 @@
 
 RTX 30 Series SS0 unlocker for windows by UEFI.
 
+Only tested on specific setup, other environment isn't tested so USE IT CAUTION!
+
 ## How to use
 
-1. Download compile EFI binary 
+1. Download compiled EFI zip from Github Releases.
+2. Extract to some folder and download `firmware-assets.exe` to same folder.
+3. Run `firmware-assets.exe` to fetch.
+4. Remove `build`, `firmware-assets.exe` on root.
+5. move folders to your seperate EFI partition (SSD or USB). DO NOT PLACE ON WINDOWS EFI!
+6. Boot with seperate EFI and run windows.
 
 ## Checked environment
 * Colorful RTX 3090 ti: PCI `10DE:2203`, subsystem `7377:2000`, VBIOS `94.02.A0.00.08`
@@ -45,3 +52,9 @@ bun run build:firmware-exe
 ```
 Run the EXE from the USB drive root to download and generate firmware in
 `RTX-UNLOCK/ASSETS`.
+
+## LICNESE
+
+This project is based on [rtx3080-unlock-public](https://github.com/rough2515-hub/rtx3080-unlock-public) with [gpu-unlock](https://github.com/Zagitta/gpu-unlock).
+
+Other LICENSE are on [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and LICENSES folder.
