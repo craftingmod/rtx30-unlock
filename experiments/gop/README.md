@@ -1,6 +1,12 @@
 # NVIDIA GOP 해제·복구 실험 1
 
-## 다음 실험: v17-external-profile (실기 미검증)
+## 현재 실험: v18-unified-layout
+
+실행 폴더를 `RTX-UNLOCK`으로 통일했다. `ASSETS/`, `PROFILE.BIN`, `DEBUG.ON`은 그 바로 아래에 둔다. 상세 로그를 켜면 GOP가 고른 새 `RUN00`–`RUN99` 하나에 `GOP.TXT`와 `UNLOCK.TXT`를 함께 저장한다. 기존 RUN은 건너뛰고 기존 로그는 덮어쓰지 않는다. DEBUG.ON이 없으면 RUN을 만들지 않는다. 사전 검사 중 일찍 거부되면 GOP.TXT만 생길 수 있다.
+
+외부 프로필 형식과 DEBUG.ON의 U 승인, 언락·화면 복구 절차는 유지한다. v17의 현재 환경 적용 경로는 사용자 성공 보고와 로그로 확인했으며, v18의 새 폴더 구조는 실기 미검증이다. 새 EFI와 `RTX-UNLOCK` 폴더 전체를 함께 배치한다. 이전 폴더의 자동 검색·이동·삭제는 하지 않는다. 아래 v17 이하의 경로는 당시 배포 파일의 기록이다. [현재 사용법](../../docs/EXTERNAL-PROFILE.md)을 따른다.
+
+## 이전 실험: v17-external-profile (적용 경로 실기 성공)
 
 공통 EFI가 실행 볼륨의 `RTX30-GOP-TEST/PROFILE.BIN`을 읽는 구현을 추가했다. JSON은 PC에서 원본 Probe REPORT/PROM과 대조한 뒤 고정 길이 파일로 변환한다. 기존 v16 EFI는 외부 파일을 읽지 못하므로 v17로 한 번 교체한다. 이후 기존 GA10x 공통 절차 안에서는 EFI 재빌드 없이 프로필을 교체할 수 있다. [빌드·패키지·프로필 교체·검증 범위](../../docs/EXTERNAL-PROFILE.md)를 참고한다.
 

@@ -1,6 +1,6 @@
 # RTX 3080 Unlock
 
-다음 실험용 **v17-external-profile**은 공통 EFI가 같은 실행 볼륨의 `RTX30-GOP-TEST/PROFILE.BIN`을 읽는다. PC에서 Probe 원본과 대조해 변환한 프로필만 사용하며, 기존 장치·PROM·메모리 배치 및 transaction 검사는 유지한다. `DEBUG.ON`이 있으면 상세 로그와 **U 키 승인**, 없으면 무로그 자동 진행을 사용한다. 첫 패키지에는 DEBUG.ON을 포함한다. 구현·빌드·모의 검사 단계이며 다른 카드의 실기 지원 완료를 의미하지 않는다. [외부 프로필 사용법](docs/EXTERNAL-PROFILE.md)을 참고한다.
+현재 실험용 **v18-unified-layout**은 같은 실행 볼륨의 `RTX-UNLOCK` 아래에 `ASSETS/`, `PROFILE.BIN`, `DEBUG.ON`을 모은다. 상세 로그는 같은 `RUNnn`에 `GOP.TXT`와 `UNLOCK.TXT`로 저장한다. `DEBUG.ON`이 있으면 상세 로그와 **U 키 승인**, 없으면 RUN을 만들지 않고 자동 진행한다. v17 외부 프로필 적용 경로는 현재 환경에서 실기 성공했으며 v18의 새 경로는 실기 미검증이다. 기존 장치·PROM·메모리 배치 및 transaction 검사는 유지한다. [현재 사용법](docs/EXTERNAL-PROFILE.md)을 참고한다.
 
 현재 `v16-ssd-selectors`는 USB/GPT SSD EFI 실행, 초기 SS0=88888888일 때 스킵, 다른 초기 셀렉터 값에서 적용 시도를 지원하는 별도 실험 빌드다. 자동 실행·기본 무로그·`DEBUG.ON` 상세 로그를 유지한다. 사용자 실기에서 예상 외 초기 SS0=24700051의 적용·영상 복구·Windows 부팅이 성공했고, 상세 로그를 켠 사전 검사~보고 완료는 약 9초였다. 이미 적용된 SS0의 스킵 경로와 무로그 실행은 아직 실기 미검증이다.
 
@@ -37,7 +37,7 @@ make unlock EXPERIMENTAL=1 PROFILE="profiles/board.json"
 
 실험 모드에서도 PROM/펌웨어 해시, 완료된 GFW 상태, WPR2 미사용, PCI capability/FLR, DMA 매핑·정리 검사와 UEFI에서 **U를 누르는 단일 시도 승인**은 유지합니다. 실제 PCI 소유권을 조회해 타깃과 다른 화면 출력 장치를 요구하므로 타깃 카드에만 모니터가 연결된 환경은 거부합니다. 기존 자산 5개와 해시는 유지하며, `ga102`라는 파일명으로 다른 GA10x를 차단하지 않습니다. 공통 Booter/GSP 코드의 근거와 V67·레지스터 절차의 미검증 범위는 [GA10x 실험 호환성](docs/GA10X-EXPERIMENTAL.md)에 기록했습니다. GA100·Turing·Ada 등은 제외합니다. 실패 후 정리를 입증하지 못하면 기존 안전 정지 절차를 유지합니다.
 
-Unlock USB의 로그/자산 폴더명은 기존 호환성을 위해 `RTX3080-UNLOCK`을 사용합니다. [USB 안내](docs/USB-BOOT.md)의 자산 5개를 그 폴더의 `ASSETS`에 배치하고 실험용 EFI를 `EFI/BOOT/BOOTX64.EFI`로 복사합니다. Probe USB의 `RTX30-PROBE` 폴더와 구분하세요. 실제 하드웨어·Windows/CUDA 검증은 별도로 필요합니다.
+새 Unlock EFI의 로그/자산 폴더명은 `RTX-UNLOCK`입니다. [USB 안내](docs/USB-BOOT.md)의 자산 5개를 그 폴더의 `ASSETS`에 배치하고 실험용 EFI를 `EFI/BOOT/BOOTX64.EFI`로 복사합니다. 외부 프로필 빌드는 `PROFILE.BIN`도 필요합니다. Probe USB의 `RTX30-PROBE` 폴더와 구분하세요. 실제 하드웨어·Windows/CUDA 검증은 별도로 필요합니다.
 
 Make가 없으면 `scripts/build-probe.ps1`, `tools/probe-to-profile.py`, `unlock/test-all.ps1`, `scripts/build-unlock.ps1 -Profile ... -Experimental`을 직접 실행할 수 있습니다. 컴파일러는 PATH 또는 `LLVM_BIN`을 사용합니다.
 

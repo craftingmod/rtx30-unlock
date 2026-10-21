@@ -27,7 +27,7 @@ python .\tools\package_usb.py --assets .\assets --output .\usb-package
 ```text
 USB:/
   EFI/BOOT/BOOTX64.EFI
-  RTX3080-UNLOCK/
+  RTX-UNLOCK/
     ASSETS/
       booter_load_ga102.bin
       v67-ga102-610.43.03.bin
@@ -41,7 +41,7 @@ USB:/
   SHA256SUMS.txt
 ```
 
-`RTX3080-UNLOCK` 폴더는 로그를 쓸 수 있어야 합니다. `BOOTX64.EFI`만 복사한 상태에서는 실행할 수 없습니다. 이 앱은 파일 내용과 보드 조건을 다시 검사합니다.
+`RTX-UNLOCK` 폴더는 로그를 쓸 수 있어야 합니다. `BOOTX64.EFI`만 복사한 상태에서는 실행할 수 없습니다. 이 앱은 파일 내용과 보드 조건을 다시 검사합니다.
 
 ## 실행
 
@@ -53,7 +53,7 @@ USB:/
 
 USB 앱이 다시 열리면 Esc로 빠져나오세요. 같은 부팅에서 U를 다시 누르지 않습니다.
 
-`STOP / POWER OFF`가 표시되면 전원 버튼으로 PC를 끕니다. 그 화면에서 Windows로 계속 진행하지 않습니다. 다시 시도하기 전에 `RTX3080-UNLOCK/RUNxx/REPORT.TXT`를 확인합니다.
+`STOP / POWER OFF`가 표시되면 전원 버튼으로 PC를 끕니다. 그 화면에서 Windows로 계속 진행하지 않습니다. 다시 시도하기 전에 `RTX-UNLOCK/RUNxx/UNLOCK.TXT`를 확인합니다.
 
 ## 적용 범위
 

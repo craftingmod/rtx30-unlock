@@ -10,8 +10,8 @@
 #ifdef GC_PRODUCTION
 #ifdef GU_RUNTIME_PROFILE_BUILD
 #include "../../unlock/runtime_profile.h"
-#define GC_DIAG "v17-external-profile"
-#define GC_DIAG_WIDE L"v17-external-profile"
+#define GC_DIAG "v18-unified-layout"
+#define GC_DIAG_WIDE L"v18-unified-layout"
 #elif defined(GU_SSD_EXPERIMENT)
 #define GC_DIAG "v16-ssd-selectors"
 #define GC_DIAG_WIDE L"v16-ssd-selectors"
@@ -52,6 +52,7 @@
 
 static EFI_SYSTEM_TABLE *Table;
 static EFI_FILE_PROTOCOL *Report;
+static UINTN RunSlot;
 static BOOLEAN LogFailed,Quiet;
 static CHAR16 *volatile Banner=L"\r\nNVIDIA GOP experiment / diagnostic " GC_DIAG_WIDE L"\r\n";
 static EFI_GUID PciGuid=EFI_PCI_IO_PROTOCOL_GUID,
@@ -80,10 +81,10 @@ static VOID ShowFailure(const char *stage,EFI_STATUS status) {
   for(i=0;i<16;i++)number[2+i]=digits[((UINT64)status>>((15-i)*4))&15];
   Say(L"\r\nGOP diagnostic " GC_DIAG_WIDE L": no detach attempted.\r\nStage: ");Say(name);
   Say(L"\r\nStatus: ");Say(number);
-  Say(L"Check USB RTX30-GOP-TEST/RUNxx/REPORT.TXT.\r\n"
-    L"For usb-log failure, copy the entire package including RTX30-GOP-TEST.\r\n"
+  Say(L"Check RTX-UNLOCK/RUNnn/GOP.TXT and UNLOCK.TXT.\r\n"
+    L"For log failure, copy the entire package including RTX-UNLOCK.\r\n"
 #ifdef GU_RUNTIME_PROFILE_BUILD
-    L"PROFILE.BIN must be valid in RTX30-GOP-TEST on this EFI volume.\r\n"
+    L"PROFILE.BIN must be valid in RTX-UNLOCK on this EFI volume.\r\n"
 #endif
 #ifdef GC_PRODUCTION
     L"Automatic boot stopped. Power off physically.\r\n");
@@ -100,6 +101,7 @@ static EFI_STATUS CloseFile(EFI_FILE_PROTOCOL *file,EFI_STATUS status) {
   return status;
 }
 static EFI_STATUS OpenLog(EFI_HANDLE image) {
+  RunSlot=100;
   EFI_BOOT_SERVICES *bs=Table->BootServices;EFI_LOADED_IMAGE_PROTOCOL *loaded=NULL;
   EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs=NULL;EFI_FILE_PROTOCOL *root=NULL,*parent=NULL,*run=NULL;
   EFI_STATUS status=bs->HandleProtocol(image,&LoadedGuid,(VOID **)&loaded);
@@ -107,7 +109,7 @@ static EFI_STATUS OpenLog(EFI_HANDLE image) {
   status=bs->HandleProtocol(loaded->DeviceHandle,&FsGuid,(VOID **)&fs);
   if(EFI_ERROR(status) || !fs)return EFI_NOT_FOUND;
   status=fs->OpenVolume(fs,&root);if(EFI_ERROR(status) || !root)return EFI_NOT_FOUND;
-  status=root->Open(root,&parent,L"\\RTX30-GOP-TEST",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
+  status=root->Open(root,&parent,L"\\RTX-UNLOCK",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
   status=CloseFile(root,status);if(EFI_ERROR(status))return CloseFile(parent,status);
   if(!parent)return EFI_NOT_FOUND;
   union {EFI_FILE_INFO info;UINT8 bytes[512];} metadata;UINTN size=sizeof(metadata);
@@ -125,18 +127,25 @@ static EFI_STATUS OpenLog(EFI_HANDLE image) {
   status=CloseFile(debug,EFI_SUCCESS);
   if(EFI_ERROR(status))return CloseFile(parent,status);
 #endif
-  status=EFI_OUT_OF_RESOURCES;
+  status=EFI_VOLUME_FULL;
   for(UINTN slot=0;slot<100;slot++) {
     CHAR16 name[]=L"RUN00";name[3]=(CHAR16)('0'+slot/10);name[4]=(CHAR16)('0'+slot%10);
     EFI_FILE_PROTOCOL *existing=NULL;
     status=parent->Open(parent,&existing,name,EFI_FILE_MODE_READ,0);
-    if(!EFI_ERROR(status)) {status=CloseFile(existing,EFI_SUCCESS);if(EFI_ERROR(status))break;status=EFI_OUT_OF_RESOURCES;continue;}
+    if(!EFI_ERROR(status)) {if(!existing){status=EFI_DEVICE_ERROR;break;}status=CloseFile(existing,EFI_SUCCESS);if(EFI_ERROR(status))break;status=EFI_VOLUME_FULL;continue;}
     if(status!=EFI_NOT_FOUND)break;
-    status=parent->Open(parent,&run,name,EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,EFI_FILE_DIRECTORY);break;
+    status=parent->Open(parent,&run,name,EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,EFI_FILE_DIRECTORY);
+    if(!EFI_ERROR(status) && run)RunSlot=slot;
+    break;
   }
   status=CloseFile(parent,status);if(EFI_ERROR(status))return CloseFile(run,status);
   if(!run)return EFI_OUT_OF_RESOURCES;
-  status=run->Open(run,&Report,L"REPORT.TXT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,0);
+  EFI_FILE_PROTOCOL *existing=NULL;
+  status=run->Open(run,&existing,L"GOP.TXT",EFI_FILE_MODE_READ,0);
+  if(!EFI_ERROR(status))return CloseFile(run,CloseFile(existing,EFI_ALREADY_STARTED));
+  if(status!=EFI_NOT_FOUND)return CloseFile(run,status);
+  status=run->Open(run,&Report,L"GOP.TXT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,0);
+  if(!EFI_ERROR(status) && !Report)status=EFI_DEVICE_ERROR;
   return CloseFile(run,status);
 }
 static EFI_STATUS Target(GC_CONTEXT *c) {
@@ -251,6 +260,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #endif
     return status;}
   context.quiet=Quiet;
+  context.run_slot=RunSlot;
   /* Persist entry before the first console call, including a failing console. */
   if(!Log("ENTRY: GOP diagnostic " GC_DIAG "; mode="
 #ifdef GC_TREE_ONLY
@@ -301,7 +311,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   if(!Log("TREE_RESULT status=%#llx touched=0\n",(unsigned long long)status))status=EFI_DEVICE_ERROR;
   status=CloseFile(Report,status);Report=NULL;
   if(EFI_ERROR(status)){ShowFailure(stage,status);return status;}
-  Say(L"Read-only capture completed. Saved RTX30-GOP-TEST/RUNxx/REPORT.TXT.\r\n"
+  Say(L"Read-only capture completed. Saved RTX-UNLOCK/RUNnn/GOP.TXT.\r\n"
     L"No drivers were detached. Returning to firmware in 20 seconds.\r\n");
   Table->BootServices->Stall(20000000);return EFI_SUCCESS;
 #else

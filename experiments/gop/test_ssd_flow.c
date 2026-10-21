@@ -7,7 +7,7 @@ static jmp_buf ExitFlow;
 static unsigned Plans,Runs,Finishes,Starts;
 static BOOLEAN Skip;
 static EFI_STATUS PreflightStatus,RunStatus;
-EFI_STATUS GxPrepare(GC_CONTEXT *c){(void)c;return PreflightStatus;}
+EFI_STATUS GxPrepare(GC_CONTEXT *c){assert(c->run_slot==(c->quiet?100:OccupiedRuns));return PreflightStatus;}
 BOOLEAN GxAlreadyApplied(VOID){return Skip;}
 BOOLEAN GxSafe(VOID){return TRUE;}
 EFI_STATUS GxFinish(VOID){Finishes++;return EFI_SUCCESS;}

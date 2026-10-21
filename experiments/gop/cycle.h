@@ -22,6 +22,7 @@ typedef struct {
 typedef struct {
   EFI_SYSTEM_TABLE *table;
   BOOLEAN quiet;
+  UINTN run_slot;
   EFI_HANDLE image, target;
   EFI_PCI_IO_PROTOCOL *pci;
   UINTN location[4];

@@ -360,7 +360,7 @@ EFI_STATUS GxPrepare(GC_CONTEXT *c) {
   EFI_STATUS clock=GvClockInit(c);if(EFI_ERROR(clock))return clock;
   if(!GuPhase("preflight-begin"))return EFI_DEVICE_ERROR;
   PatchIo=TRUE;GuIoSetQuiet(c->quiet);
-  EFI_STATUS s=GuIoOpen(c->image,Table);
+  EFI_STATUS s=GuIoOpenRun(c->image,Table,c->run_slot);
   if(!EFI_ERROR(s))s=ConfigCheck(TRUE);
   if(!EFI_ERROR(s))s=BarCheck();
 #ifdef GU_SSD_EXPERIMENT

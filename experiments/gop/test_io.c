@@ -96,10 +96,13 @@ static BOOLEAN MissingMarker,DebugMarker,DebugOpenError;
 static EFI_FILE_PROTOCOL DebugFile;
 static UINT8 SecureEnabled;
 static unsigned ReportCloses;
+static UINTN OccupiedRuns;
+static BOOLEAN GopExists;
 static EFI_STATUS EFIAPI FileClose(EFI_FILE_PROTOCOL *file){if(file==&File)ReportCloses++;return EFI_SUCCESS;}
 static EFI_STATUS EFIAPI Volume(EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs,EFI_FILE_PROTOCOL **root){assert(fs==&Fs);*root=&RootFile;return EFI_SUCCESS;}
 static EFI_STATUS EFIAPI RootOpen(EFI_FILE_PROTOCOL *root,EFI_FILE_PROTOCOL **file,CHAR16 *name,UINT64 mode,UINT64 attr){
-  (void)name;assert(root==&RootFile && mode==(EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE) && !attr);
+  static const CHAR16 expected[]=L"\\RTX-UNLOCK";
+  assert(!memcmp(name,expected,sizeof(expected)) && root==&RootFile && mode==(EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE) && !attr);
   *file=MissingMarker?NULL:&ParentFile;return MissingMarker?EFI_NOT_FOUND:EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI ParentOpen(EFI_FILE_PROTOCOL *parent,EFI_FILE_PROTOCOL **file,CHAR16 *name,UINT64 mode,UINT64 attr){
@@ -115,11 +118,16 @@ static EFI_STATUS EFIAPI ParentOpen(EFI_FILE_PROTOCOL *parent,EFI_FILE_PROTOCOL 
 #else
   (void)name;
 #endif
-  if(mode==EFI_FILE_MODE_READ){*file=NULL;return EFI_NOT_FOUND;}
+  assert(name[0]=='R' && name[1]=='U' && name[2]=='N' && !name[5]);
+  UINTN slot=(name[3]-'0')*10+name[4]-'0';
+  if(mode==EFI_FILE_MODE_READ){*file=slot<OccupiedRuns?&RunFile:NULL;return *file?EFI_SUCCESS:EFI_NOT_FOUND;}
   assert(attr==EFI_FILE_DIRECTORY);*file=&RunFile;return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI RunOpen(EFI_FILE_PROTOCOL *run,EFI_FILE_PROTOCOL **file,CHAR16 *name,UINT64 mode,UINT64 attr){
-  (void)name;(void)mode;assert(run==&RunFile && !attr);*file=&File;return EFI_SUCCESS;
+  static const CHAR16 expected[]=L"GOP.TXT";
+  assert(!memcmp(name,expected,sizeof(expected)) && run==&RunFile && !attr);
+  if(mode==EFI_FILE_MODE_READ){*file=GopExists?&File:NULL;return *file?EFI_SUCCESS:EFI_NOT_FOUND;}
+  *file=&File;return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI Metadata(EFI_FILE_PROTOCOL *parent,EFI_GUID *guid,UINTN *size,VOID *buffer){
   assert(parent==&ParentFile && !memcmp(guid,&InfoGuid,sizeof(*guid)) && *size>=sizeof(EFI_FILE_INFO));
@@ -149,6 +157,7 @@ static EFI_STATUS EFIAPI TreeOpens(EFI_HANDLE h,EFI_GUID *g,EFI_OPEN_PROTOCOL_IN
 #endif
 static VOID Startup(VOID){
   Setup();MissingMarker=DebugOpenError=FALSE;DebugMarker=TRUE;DebugFile.Close=FileClose;ReportCloses=0;SecureEnabled=1;
+  OccupiedRuns=0;GopExists=FALSE;
   memset(&RootFile,0,sizeof(RootFile));memset(&ParentFile,0,sizeof(ParentFile));memset(&RunFile,0,sizeof(RunFile));
   RootFile.Open=RootOpen;ParentFile.Open=ParentOpen;RunFile.Open=RunOpen;ParentFile.GetInfo=Metadata;
   RootFile.Close=ParentFile.Close=RunFile.Close=File.Close=FileClose;
@@ -190,6 +199,13 @@ int main(void){
   Setup();System.ConIn=NULL;assert(Approve()==EFI_UNSUPPORTED && !Polls);
 #endif
 #endif
+  Startup();Report=NULL;OccupiedRuns=3;
+  assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_SUCCESS && RunSlot==3 && Report==&File);
+  assert(CloseFile(Report,EFI_SUCCESS)==EFI_SUCCESS);Report=NULL;
+  Startup();Report=NULL;OccupiedRuns=100;
+  assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_VOLUME_FULL && !Report && !Writes);
+  Startup();Report=NULL;GopExists=TRUE;
+  assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_ALREADY_STARTED && !Report && !Writes);
   const UINT32 identities[]={0x250310deU,0x278610deU,0x220410deU};
   for(UINTN i=0;i<sizeof(identities)/sizeof(identities[0]);i++) {
     Setup();DeviceIdentity=identities[i];GC_CONTEXT context={0};

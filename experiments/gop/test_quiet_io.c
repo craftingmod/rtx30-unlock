@@ -17,6 +17,8 @@ static EFI_FILE_PROTOCOL DiskRoot,AssetParent,FileRun,FileReport;
 static struct {USB_DEVICE_PATH usb;EFI_DEVICE_PATH_PROTOCOL end;} Path;
 static unsigned Creates,Writes,Flushes,RunQueries;
 static BOOLEAN ShortWrite,PartitionPresent;
+static BOOLEAN SharedRunExists,UnlockExists,RunIsFile;
+static UINTN RequestedSlot;
 static EFI_PARTITION_INFO_PROTOCOL Partition;
 static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *g,VOID **p){
   (void)h;
@@ -31,17 +33,21 @@ static EFI_STATUS EFIAPI Volume(EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *f,EFI_FILE_PROT
 static EFI_STATUS EFIAPI Close(EFI_FILE_PROTOCOL *f){(void)f;return EFI_SUCCESS;}
 static EFI_STATUS EFIAPI Open(EFI_FILE_PROTOCOL *f,EFI_FILE_PROTOCOL **p,CHAR16 *name,UINT64 mode,UINT64 attr){
   (void)attr;*p=NULL;if(mode&EFI_FILE_MODE_CREATE)Creates++;
-  if(f==&DiskRoot){*p=&AssetParent;return EFI_SUCCESS;}
+  if(f==&DiskRoot){static const CHAR16 expected[]=L"\\RTX-UNLOCK";assert(!memcmp(name,expected,sizeof(expected)));*p=&AssetParent;return EFI_SUCCESS;}
   if(f==&AssetParent){
     if(name[0]=='A')return EFI_NOT_FOUND;
-    RunQueries++;if(mode==EFI_FILE_MODE_READ)return EFI_NOT_FOUND;
+    RunQueries++;RequestedSlot=(name[3]-'0')*10+name[4]-'0';
+    if(mode==EFI_FILE_MODE_READ || !(mode&EFI_FILE_MODE_CREATE)){
+      *p=SharedRunExists?&FileRun:NULL;return *p?EFI_SUCCESS:EFI_NOT_FOUND;
+    }
     *p=&FileRun;return EFI_SUCCESS;
   }
-  assert(f==&FileRun);if(mode==EFI_FILE_MODE_READ)return EFI_NOT_FOUND;
+  static const CHAR16 expected[]=L"UNLOCK.TXT";assert(f==&FileRun && !memcmp(name,expected,sizeof(expected)));
+  if(mode==EFI_FILE_MODE_READ){*p=UnlockExists?&FileReport:NULL;return *p?EFI_SUCCESS:EFI_NOT_FOUND;}
   *p=&FileReport;return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI Info(EFI_FILE_PROTOCOL *f,EFI_GUID *g,UINTN *n,VOID *out){
-  (void)f;(void)g;memset(out,0,*n);((EFI_FILE_INFO *)out)->Size=sizeof(EFI_FILE_INFO);((EFI_FILE_INFO *)out)->Attribute=EFI_FILE_DIRECTORY;return EFI_SUCCESS;
+  (void)g;memset(out,0,*n);((EFI_FILE_INFO *)out)->Size=sizeof(EFI_FILE_INFO);((EFI_FILE_INFO *)out)->Attribute=(f==&FileRun && RunIsFile)?0:EFI_FILE_DIRECTORY;return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI Write(EFI_FILE_PROTOCOL *f,UINTN *n,VOID *p){assert(f==&FileReport && p && *n);Writes++;if(ShortWrite)(*n)--;return EFI_SUCCESS;}
 static EFI_STATUS EFIAPI Flush(EFI_FILE_PROTOCOL *f){assert(f==&FileReport);Flushes++;return EFI_SUCCESS;}
@@ -53,6 +59,7 @@ static void Setup(void){
   memset(&Path,0,sizeof(Path));Path.usb.Header.Type=MESSAGING_DEVICE_PATH;Path.usb.Header.SubType=MSG_USB_DP;Path.usb.Header.Length[0]=sizeof(Path.usb);
   Path.end.Type=END_DEVICE_PATH_TYPE;Path.end.SubType=END_ENTIRE_DEVICE_PATH_SUBTYPE;Path.end.Length[0]=4;
   Creates=Writes=Flushes=RunQueries=0;ShortWrite=PartitionPresent=FALSE;
+  SharedRunExists=UnlockExists=RunIsFile=FALSE;RequestedSlot=100;
   memset(&Partition,0,sizeof(Partition));Partition.Revision=EFI_PARTITION_INFO_PROTOCOL_REVISION;
   Partition.Type=PARTITION_TYPE_GPT;EFI_GUID esp=EFI_PART_TYPE_EFI_SYSTEM_PART_GUID;Partition.Info.Gpt.PartitionTypeGUID=esp;
 }
@@ -63,6 +70,17 @@ int main(void){
   Setup();GuIoSetQuiet(FALSE);assert(GuIoOpen(NULL,&System)==EFI_SUCCESS && Report && Creates==2 && Writes==2 && Flushes==2);
   assert(GuIoClose()==EFI_SUCCESS);
   Setup();GuIoSetQuiet(FALSE);ShortWrite=TRUE;assert(GuIoOpen(NULL,&System)==EFI_DEVICE_ERROR && !GuLogReady());assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(FALSE);SharedRunExists=TRUE;
+  assert(GuIoOpenRun(NULL,&System,7)==EFI_SUCCESS && RequestedSlot==7 && RunQueries==1 && Creates==1 && Writes==2);
+  assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(FALSE);
+  assert(GuIoOpenRun(NULL,&System,7)==EFI_NOT_FOUND && RequestedSlot==7 && !Creates && !Writes);assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(FALSE);SharedRunExists=UnlockExists=TRUE;
+  assert(GuIoOpenRun(NULL,&System,7)==EFI_ALREADY_STARTED && !Creates && !Writes);assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(FALSE);SharedRunExists=RunIsFile=TRUE;
+  assert(GuIoOpenRun(NULL,&System,7)==EFI_COMPROMISED_DATA && !Creates && !Writes);assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(FALSE);assert(GuIoOpenRun(NULL,&System,100)==EFI_INVALID_PARAMETER && !RunQueries && !Creates);
+  Setup();GuIoSetQuiet(TRUE);assert(GuIoOpenRun(NULL,&System,100)==EFI_SUCCESS && !RunQueries && !Creates && !Writes);assert(GuIoClose()==EFI_SUCCESS);
   Setup();GuIoSetQuiet(TRUE);assert(GuIoOpen(NULL,&System)==EFI_SUCCESS);Gu.fault=TRUE;
   assert(GuIoClose()==EFI_ACCESS_DENIED);Gu.fault=FALSE;assert(GuIoClose()==EFI_SUCCESS);
   Setup();GuIoSetQuiet(TRUE);Path.usb.Header.SubType=MSG_NVME_NAMESPACE_DP;PartitionPresent=TRUE;
@@ -75,5 +93,5 @@ int main(void){
 #else
   assert(GuIoOpen(NULL,&System)==EFI_UNSUPPORTED);
 #endif
-  puts("PASS quiet asset IO: no RUN/create/write/flush; debug reports retained; asset and containment failures preserved");return 0;
+  puts("PASS unified IO: selected RUN reused without mkdir; existing UNLOCK preserved; quiet no RUN/create/write; asset/containment failures preserved");return 0;
 }

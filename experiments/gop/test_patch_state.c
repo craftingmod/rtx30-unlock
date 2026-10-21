@@ -14,6 +14,7 @@ VOID GuConsole(const char *text){(void)text;assert(0);}
 BOOLEAN GuLogReady(VOID){return PatchLogOk;}
 VOID GuIoSetQuiet(BOOLEAN quiet){(void)quiet;}
 EFI_STATUS GuIoOpen(EFI_HANDLE h,EFI_SYSTEM_TABLE *t){(void)h;(void)t;return EFI_UNSUPPORTED;}
+EFI_STATUS GuIoOpenRun(EFI_HANDLE h,EFI_SYSTEM_TABLE *t,UINTN slot){(void)slot;return GuIoOpen(h,t);}
 EFI_STATUS GuIoClose(VOID){return EFI_SUCCESS;}
 EFI_STATUS GuLoadAssets(VOID){return EFI_UNSUPPORTED;}
 VOID GuReleaseAssets(VOID){}

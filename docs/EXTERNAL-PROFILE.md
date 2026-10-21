@@ -1,6 +1,6 @@
-# v17 외부 프로필 실험
+# v18 외부 프로필 및 통합 폴더
 
-v17-external-profile은 공통 EFI 하나와 `RTX30-GOP-TEST/PROFILE.BIN`을 사용한다. EFI는 JSON을 파싱하지 않는다. PC의 기존 Probe 검증 도구가 원본 REPORT/PROM과 JSON의 일치를 검사한 뒤 176바이트 고정 형식으로 변환한다. 기존 v16 EFI는 이 파일을 읽지 못하므로 v17로 한 번 교체해야 한다.
+v18-unified-layout은 공통 EFI 하나와 `RTX-UNLOCK/PROFILE.BIN`을 사용한다. EFI는 JSON을 파싱하지 않는다. PC의 기존 Probe 검증 도구가 원본 REPORT/PROM과 JSON의 일치를 검사한 뒤 176바이트 고정 형식으로 변환한다. v17과 프로필 바이너리 형식은 같다. v18은 새 경로만 읽으므로 새 EFI와 RTX-UNLOCK 폴더를 함께 배치해야 한다.
 
 이 기능은 GA102·GA103·GA104·GA106·GA107의 **실험용 프로필 로딩**이다. 다른 카드의 펌웨어 실행·FLR·영상 복구·Windows/CUDA 성공을 인증하지 않는다. GA100·Turing·Ada는 거부한다. 칩별로 다른 실행 절차가 필요하면 공통 EFI도 수정해야 한다.
 
@@ -10,10 +10,10 @@ v17-external-profile은 공통 EFI 하나와 `RTX30-GOP-TEST/PROFILE.BIN`을 사
 
 ```powershell
 ./scripts/build-gop-experiment.ps1 -FullUnlock -WindowsHandoff -Production -SsdExperiment -ExternalProfile
-python tools/package_gop_experiment.py --output build/gop-experiment-v17-external-profile --zip build/gop-experiment-v17-external-profile.zip --assets assets --profile profiles/board-refresh-run01.json
+python tools/package_gop_experiment.py --output build/gop-experiment-v18-unified-layout --zip build/gop-experiment-v18-unified-layout.zip --assets assets --profile profiles/board-refresh-run01.json
 ```
 
-패키지에는 `EFI/BOOT/BOOTX64.EFI`, 검증된 자산 5개, `RTX30-GOP-TEST/PROFILE.BIN`, 빈 `DEBUG.ON`, 소스와 빌드 근거가 포함된다. 위 프로필은 기존 RUN01 캡처용이며 다른 카드에 재사용하지 않는다. 출력 폴더/ZIP은 새 경로여야 한다. 실제 SSD/USB·NVRAM·Windows Boot Manager는 빌드 및 패키지 명령이 변경하지 않는다.
+패키지에는 `EFI/BOOT/BOOTX64.EFI`, 검증된 자산 5개, `RTX-UNLOCK/PROFILE.BIN`, 빈 `DEBUG.ON`, 소스와 빌드 근거가 포함된다. 위 프로필은 기존 RUN01 캡처용이며 다른 카드에 재사용하지 않는다. 출력 폴더/ZIP은 새 경로여야 한다. 실제 SSD/USB·NVRAM·Windows Boot Manager는 빌드 및 패키지 명령이 변경하지 않는다.
 
 ## 다른 환경: EFI를 다시 빌드하지 않고 프로필 교체
 
@@ -25,9 +25,9 @@ python tools/probe-to-profile.py --report captures/NEW/REPORT.TXT --prom capture
 python tools/runtime_profile.py profiles/new-board.json --output build/NEW-PROFILE.BIN
 ```
 
-3. EFI를 실행할 **같은 볼륨**의 `RTX30-GOP-TEST/PROFILE.BIN`을 새 파일로 교체한다. EFI와 자산은 공통으로 사용한다. 여러 볼륨에서 검색하거나 다른 프로필로 자동 재시도하지 않는다.
-4. 첫 시험은 `RTX30-GOP-TEST/DEBUG.ON`을 둔다. 모든 사전 검사 후 **U**를 한 번 눌러 진행한다. Esc·30초 시간 초과·입력 오류면 적용 및 Windows 자동 부팅을 중단한다. SS0 적용 완료로 스킵할 때도 DEBUG.ON이 있으면 U 승인을 요구한다.
-5. `RTX30-GOP-TEST/RUNxx/REPORT.TXT`, `RTX3080-UNLOCK/RUNxx/REPORT.TXT`와 Windows 결과를 수집한다. 그 환경에서 검증 후 DEBUG.ON을 제거하면 무로그·무입력 자동 적용/스킵 및 Windows 연결 부팅을 사용한다.
+3. EFI를 실행할 **같은 볼륨**의 `RTX-UNLOCK/PROFILE.BIN`을 새 파일로 교체한다. EFI와 자산은 공통으로 사용한다. 여러 볼륨에서 검색하거나 다른 프로필로 자동 재시도하지 않는다.
+4. 첫 시험은 `RTX-UNLOCK/DEBUG.ON`을 둔다. 모든 사전 검사 후 **U**를 한 번 눌러 진행한다. Esc·30초 시간 초과·입력 오류면 적용 및 Windows 자동 부팅을 중단한다. SS0 적용 완료로 스킵할 때도 DEBUG.ON이 있으면 U 승인을 요구한다.
+5. `RTX-UNLOCK/RUNnn/GOP.TXT`, `RTX-UNLOCK/RUNnn/UNLOCK.TXT`와 Windows 결과를 수집한다. 그 환경에서 검증 후 DEBUG.ON을 제거하면 무로그·무입력 자동 적용/스킵 및 Windows 연결 부팅을 사용한다.
 
 ## 유지하는 검사와 파일의 신뢰 범위
 
@@ -61,4 +61,24 @@ cmd /c experiments\gop\test-production.cmd
 cmd /c experiments\gop\test-ssd.cmd
 ```
 
-이 검사는 모의 펌웨어와 캡처 fixture를 사용하며 실제 GPU 쓰기·FLR·Windows 실행은 하지 않는다. v17의 실기 적용·스킵·다른 카드 지원·반복 안정성은 아직 미검증이다.
+이 검사는 모의 펌웨어와 캡처 fixture를 사용하며 실제 GPU 쓰기·FLR·Windows 실행은 하지 않는다. v17의 현재 환경 적용은 사용자 성공 보고와 로그로 확인했다. v18의 통합 경로·스킵·무로그 실행·다른 카드 지원·반복 안정성은 실기 미검증이다.
+
+## 실행 볼륨의 폴더 구조
+
+```text
+EFI/BOOT/BOOTX64.EFI
+RTX-UNLOCK/
+  ASSETS/          (검증된 자산 5개)
+  PROFILE.BIN      (v17과 같은 바이너리 형식)
+  DEBUG.ON         (선택 사항, 첫 패키지에는 포함)
+  RUN00/
+    GOP.TXT
+    UNLOCK.TXT
+  RUN01/
+    GOP.TXT
+    UNLOCK.TXT
+```
+
+상세 로그를 켰을 때 GOP가 먼저 비어 있는 RUN 번호를 고르고 Unlock이 같은 번호의 폴더를 연다. 기존 RUN은 건너뛰며 GOP.TXT나 UNLOCK.TXT가 이미 있으면 덮어쓰지 않는다. RUN00–RUN99가 모두 있으면 GPU 해제 전에 중단한다. DEBUG.ON이 없으면 RUN/로그 파일을 만들지 않는다. Unlock 사전 검사에 도달하기 전에 실패하면 GOP.TXT만 남을 수 있다.
+
+새 패키지를 EFI 실행 볼륨에 배치하고 BOOTX64.EFI도 교체한다. 기존 두 폴더는 자동으로 이동하거나 삭제하지 않는다. 과거 로그는 보존할 수 있지만 새 EFI는 이전 경로로 돌아가서 읽지 않는다.

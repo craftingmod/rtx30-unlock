@@ -85,15 +85,15 @@ class UsbPackageTests(unittest.TestCase):
         result = self.run_package()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.output / 'EFI/BOOT/BOOTX64.EFI').read_bytes(), self.efi.read_bytes())
-        self.assertEqual((self.output / 'RTX3080-UNLOCK/ASSETS/asset2.bin').read_bytes(), b'asset-2')
-        self.assertTrue((self.output / 'RTX3080-UNLOCK/LICENSES/GPL-2.0.txt').is_file())
-        self.assertTrue((self.output / 'RTX3080-UNLOCK/LICENSES/EDK2.txt').is_file())
-        with zipfile.ZipFile(self.output / 'RTX3080-UNLOCK/SOURCE.zip') as archive:
+        self.assertEqual((self.output / 'RTX-UNLOCK/ASSETS/asset2.bin').read_bytes(), b'asset-2')
+        self.assertTrue((self.output / 'RTX-UNLOCK/LICENSES/GPL-2.0.txt').is_file())
+        self.assertTrue((self.output / 'RTX-UNLOCK/LICENSES/EDK2.txt').is_file())
+        with zipfile.ZipFile(self.output / 'RTX-UNLOCK/SOURCE.zip') as archive:
             self.assertEqual(archive.read('unlock/app.c'), b'/* source fixture */\n')
             self.assertNotIn('.env', archive.namelist())
             self.assertNotIn('unlock/build/BOOTX64.EFI', archive.namelist())
         hashes = (self.output / 'SHA256SUMS.txt').read_text()
-        self.assertIn(hashlib.sha256(b'asset-2').hexdigest() + '  RTX3080-UNLOCK/ASSETS/asset2.bin', hashes)
+        self.assertIn(hashlib.sha256(b'asset-2').hexdigest() + '  RTX-UNLOCK/ASSETS/asset2.bin', hashes)
 
     def test_missing_assets_produces_explicit_incomplete_template(self):
         result = self.run_package(with_assets=False)
@@ -101,7 +101,7 @@ class UsbPackageTests(unittest.TestCase):
         manifest = json.loads((self.output / 'PACKAGE.json').read_text())
         self.assertFalse(manifest['assets_included'])
         self.assertFalse(manifest['ready_for_boot'])
-        self.assertTrue((self.output / 'RTX3080-UNLOCK/ASSETS/REQUIRED-ASSETS.json').is_file())
+        self.assertTrue((self.output / 'RTX-UNLOCK/ASSETS/REQUIRED-ASSETS.json').is_file())
 
     def test_changed_asset_is_rejected_before_output_creation(self):
         (self.assets / 'asset1.bin').write_bytes(b'changed')

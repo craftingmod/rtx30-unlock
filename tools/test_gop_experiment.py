@@ -50,17 +50,20 @@ class GopPackage(unittest.TestCase):
     def test_package_includes_matching_efi_and_rebuildable_sources(self):
         with tempfile.TemporaryDirectory() as directory:
             output = package(Path(directory) / 'usb', **self.profile_options)
-            self.assertTrue((output / 'RTX30-GOP-TEST').is_dir())
-            self.assertTrue((output / 'RTX30-GOP-TEST/README.txt').is_file())
+            self.assertTrue((output / 'RTX-UNLOCK').is_dir())
+            self.assertTrue((output / 'RTX-UNLOCK/README.txt').is_file())
+            self.assertFalse((output / 'RTX30-GOP-TEST').exists())
+            self.assertFalse((output / 'RTX3080-UNLOCK').exists())
             manifest = json.loads((output / 'build-manifest.json').read_text(encoding='utf-8-sig'))
             self.assertIn(manifest.get('Mode', 'cycle'), ('cycle', 'tree-read-only', 'leaf-member', 'full-flr', 'full-unlock'))
             if manifest.get('Mode') == 'full-unlock':
-                self.assertTrue((output / 'RTX3080-UNLOCK/ASSETS/README.txt').is_file())
+                self.assertTrue((output / 'RTX-UNLOCK/ASSETS/README.txt').is_file())
             if manifest.get('Production'):
-                self.assertIn('DEBUG.ON', (output / 'RTX30-GOP-TEST/README.txt').read_text())
-                self.assertEqual((output / 'RTX30-GOP-TEST/DEBUG.ON').exists(), bool(manifest.get('ExternalProfile')))
+                self.assertIn('DEBUG.ON', (output / 'RTX-UNLOCK/README.txt').read_text())
+                self.assertIn('GOP.TXT and UNLOCK.TXT', (output / 'RTX-UNLOCK/README.txt').read_text())
+                self.assertEqual((output / 'RTX-UNLOCK/DEBUG.ON').exists(), bool(manifest.get('ExternalProfile')))
             if manifest.get('ExternalProfile'):
-                self.assertEqual((output / 'RTX30-GOP-TEST/PROFILE.BIN').stat().st_size, 176)
+                self.assertEqual((output / 'RTX-UNLOCK/PROFILE.BIN').stat().st_size, 176)
             if manifest.get('WindowsHandoff'):
                 for source, name in (('experiments/gop/windows-check.ps1', 'check.ps1'),
                                      ('analysis/compute-benchmark.cu', 'compute-benchmark.cu'),
@@ -85,7 +88,7 @@ class GopPackage(unittest.TestCase):
                 bundle.extractall(extracted)
                 self.assertEqual((extracted / 'EFI/BOOT/BOOTX64.EFI').read_bytes(),
                                  (output / 'EFI/BOOT/BOOTX64.EFI').read_bytes())
-                self.assertTrue((extracted / 'RTX30-GOP-TEST/README.txt').is_file())
+                self.assertTrue((extracted / 'RTX-UNLOCK/README.txt').is_file())
 
     def test_zip_refuses_existing_file_and_missing_marker(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -163,8 +166,8 @@ class GopPackage(unittest.TestCase):
             second = package(Path(directory) / 'second', profile=second_profile)
             self.assertEqual((first / 'EFI/BOOT/BOOTX64.EFI').read_bytes(),
                              (second / 'EFI/BOOT/BOOTX64.EFI').read_bytes())
-            self.assertNotEqual((first / 'RTX30-GOP-TEST/PROFILE.BIN').read_bytes(),
-                                (second / 'RTX30-GOP-TEST/PROFILE.BIN').read_bytes())
+            self.assertNotEqual((first / 'RTX-UNLOCK/PROFILE.BIN').read_bytes(),
+                                (second / 'RTX-UNLOCK/PROFILE.BIN').read_bytes())
             with self.assertRaisesRegex(ValueError, 'requires --profile'):
                 package(Path(directory) / 'missing')
             second_profile.write_text('{}', encoding='utf-8')

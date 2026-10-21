@@ -63,33 +63,38 @@ static EFI_STATUS Metadata(EFI_FILE_PROTOCOL *File,BOOLEAN Directory,UINTN Expec
     (!Directory && data.info.FileSize!=Expected))return EFI_COMPROMISED_DATA;
   return EFI_SUCCESS;
 }
-EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
+static EFI_STATUS IoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St,BOOLEAN Shared,UINTN Selected) {
   Table=St;Root=Parent=Run=Report=NULL;LogFault=FALSE;memset(GuAssets,0,sizeof(GuAssets));
+  if(Shared && !Quiet && Selected>=100)return EFI_INVALID_PARAMETER;
   EFI_LOADED_IMAGE_PROTOCOL *loaded=NULL;EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs=NULL;
   EFI_STATUS status=Table->BootServices->HandleProtocol(Image,&LoadedGuid,(VOID **)&loaded);
   if(EFI_ERROR(status) || !loaded || !UsbPath(loaded->DeviceHandle))return EFI_UNSUPPORTED;
   status=Table->BootServices->HandleProtocol(loaded->DeviceHandle,&FsGuid,(VOID **)&fs);
   if(EFI_ERROR(status) || !fs)return EFI_UNSUPPORTED;
   status=fs->OpenVolume(fs,&Root);if(EFI_ERROR(status) || !Root)return EFI_DEVICE_ERROR;
-  status=Root->Open(Root,&Parent,L"\\RTX3080-UNLOCK",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
+  status=Root->Open(Root,&Parent,L"\\RTX-UNLOCK",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE,0);
   if(EFI_ERROR(status) || !Parent)return EFI_NOT_FOUND;
   status=Metadata(Parent,TRUE,0);if(EFI_ERROR(status))return status;
   if(Quiet)return EFI_SUCCESS;
-  for(UINTN slot=0;slot<100;slot++) {
+  for(UINTN slot=Shared?Selected:0;slot<(Shared?Selected+1:100);slot++) {
     CHAR16 name[]=L"RUN00";name[3]=(CHAR16)('0'+slot/10);name[4]=(CHAR16)('0'+slot%10);
     EFI_FILE_PROTOCOL *existing=NULL;
-    status=Parent->Open(Parent,&existing,name,EFI_FILE_MODE_READ,0);
+    status=Parent->Open(Parent,&existing,name,Shared?(EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE):EFI_FILE_MODE_READ,0);
     if(!EFI_ERROR(status)) {
-      if(!existing || EFI_ERROR(existing->Close(existing)))return EFI_DEVICE_ERROR;continue;
+      if(!existing)return EFI_DEVICE_ERROR;
+      if(Shared)Run=existing;
+      else {if(EFI_ERROR(existing->Close(existing)))return EFI_DEVICE_ERROR;continue;}
+    } else {
+      if(status!=EFI_NOT_FOUND || Shared)return status;
+      status=Parent->Open(Parent,&Run,name,EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,EFI_FILE_DIRECTORY);
+      if(EFI_ERROR(status) || !Run)return EFI_DEVICE_ERROR;
     }
-    if(status!=EFI_NOT_FOUND)return status;
-    status=Parent->Open(Parent,&Run,name,EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,EFI_FILE_DIRECTORY);
-    if(EFI_ERROR(status) || !Run)return EFI_DEVICE_ERROR;
+    existing=NULL;
     status=Metadata(Run,TRUE,0);if(EFI_ERROR(status))return status;
-    status=Run->Open(Run,&existing,L"REPORT.TXT",EFI_FILE_MODE_READ,0);
+    status=Run->Open(Run,&existing,L"UNLOCK.TXT",EFI_FILE_MODE_READ,0);
     if(!EFI_ERROR(status)){if(existing)existing->Close(existing);return EFI_ALREADY_STARTED;}
     if(status!=EFI_NOT_FOUND)return status;
-    status=Run->Open(Run,&Report,L"REPORT.TXT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,0);
+    status=Run->Open(Run,&Report,L"UNLOCK.TXT",EFI_FILE_MODE_READ|EFI_FILE_MODE_WRITE|EFI_FILE_MODE_CREATE,0);
     if(EFI_ERROR(status) || !Report)return EFI_DEVICE_ERROR;
     GuLog("RTX GA10x UEFI unlock experiment\nRUN%02u\nBus Master protocol state checks; hardware fix unproven; one manual attempt per launch.\n",(unsigned)slot);
     GuLogText("PIO readback is not an execution gate. This path does not independently verify TCM contents; FWSEC scratch/WPR results are required.\n");
@@ -97,6 +102,8 @@ EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St) {
   }
   return EFI_VOLUME_FULL;
 }
+EFI_STATUS GuIoOpen(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St){return IoOpen(Image,St,FALSE,0);}
+EFI_STATUS GuIoOpenRun(EFI_HANDLE Image,EFI_SYSTEM_TABLE *St,UINTN Slot){return IoOpen(Image,St,TRUE,Slot);}
 EFI_STATUS GuLoadAssets(VOID) {
   for(UINTN i=0;i<5;i++) {
     EFI_FILE_PROTOCOL *file=NULL;const ASSET_SPEC *spec=&Specs[i];

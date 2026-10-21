@@ -7,7 +7,7 @@
     },
     {
       "path": ".gitignore",
-      "sha256": "31bad7f0c53fd4fcbde0785c77e0788ae29094e9e0eab24ace19e369cc68675d"
+      "sha256": "cfe89b52e3e5c162179820fdb7100037af32940b821cdba63cceb76a2c4b3ba5"
     },
     {
       "path": "LICENSE",
@@ -35,11 +35,11 @@
     },
     {
       "path": "README.md",
-      "sha256": "cbf67ce292014e1aa9770a225bc661f4648795706e3832706d71f5a46f50eb5c"
+      "sha256": "99cdb37184f17c30353bdabfe4b0c7645286ddf9f02dffd906c54e70fd9debbf"
     },
     {
       "path": "TESTING.md",
-      "sha256": "c3d22e6a414e09eae591005d6027499eaf3fac1afe0d5d273adcd1189c284707"
+      "sha256": "d16dd5ecd31925998590d7f2f615c5bb60496999f751b9f2144888dd688a0982"
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
@@ -47,11 +47,15 @@
     },
     {
       "path": "analysis/build-benchmark.cmd",
-      "sha256": "e3a0a9d05680d946c720d45c7eca91137b4159ea13d4870100158af088d155ca"
+      "sha256": "2d1bb4074f38195a8756311f84564baff596f9fa579ada6f3c9e17496612ab20"
     },
     {
       "path": "analysis/compute-benchmark.cu",
-      "sha256": "57b04fa8599ce298d58237246b4353e72000ce65d3d75bd406e97d1d26ec0fd2"
+      "sha256": "0953b6ca2f256b8938fe4fdb84ceebe7fe07c41d3369038008d31a67e63e1efa"
+    },
+    {
+      "path": "captures/README.md",
+      "sha256": "a86abd4e09e00c018e009ebcd5f496bbd58280ed24197291cbba46ae46db9d1e"
     },
     {
       "path": "deps/edk2/License.txt",
@@ -2618,12 +2622,20 @@
       "sha256": "20b43822b0737cbd0f692ad8200cba4cfc47c192431827a98056c8a0068efb19"
     },
     {
+      "path": "docs/EXTERNAL-PROFILE.md",
+      "sha256": "1591b919db63fa76573dbaee2e11701ec720f8022339494be34f183f119ee9af"
+    },
+    {
       "path": "docs/GA10X-EXPERIMENTAL.md",
       "sha256": "6bb619e4a145527f7b48097666f08cad8728bfcfa608c15050a6bbffba952af9"
     },
     {
+      "path": "docs/NVIDIA-GOP-RESEARCH.md",
+      "sha256": "f0f2fbd23457e91bb165215b75cb851c4484fc64b4e610e33ad6eb00f0f28106"
+    },
+    {
       "path": "docs/USB-BOOT.md",
-      "sha256": "ef40402eebd5c4b28da521de6b230747821f002fdccbde178f89c2da4eb6e93b"
+      "sha256": "c3b7aac046f2dae9f77c4bc1c2c1f8c92594bf94b0eb0d912f6166d790db28a7"
     },
     {
       "path": "docs/rtx30-uefi-probe-unlock-plan.md",
@@ -2640,6 +2652,162 @@
     {
       "path": "evidence/unlock-boot-09/REPORT.TXT",
       "sha256": "61996fd7bb47bdec6ffa0fd9aafed27e5e8ee4c337afb4cb0df003678c458ec9"
+    },
+    {
+      "path": "experiments/gop/README.md",
+      "sha256": "31abf50b931c1107154038a9224bea86041fe25a7f397fe27d8b8c77519d0e5e"
+    },
+    {
+      "path": "experiments/gop/app.c",
+      "sha256": "c6ef4d64cc9552748afa07465df3d79f68cd6e06ac511617ec007a136375d339"
+    },
+    {
+      "path": "experiments/gop/cycle.c",
+      "sha256": "589752fcc1fb48ff2a3b48fe63dccfd3b1a3b87ec0097533dc6ff701130d5566"
+    },
+    {
+      "path": "experiments/gop/cycle.h",
+      "sha256": "1012e8e92f280f75b26ff5cc59e6fe9c63e6616362d05156a47a94a06c71e4ca"
+    },
+    {
+      "path": "experiments/gop/full.c",
+      "sha256": "dbea7bc93c80419f1c54e66cbd51e3f81584b4e92897a083ae8ea0357a78d043"
+    },
+    {
+      "path": "experiments/gop/full.h",
+      "sha256": "f89730e8f5626d4de016fca18fa3365d0bd8563f459885d4543d7484ae4af98c"
+    },
+    {
+      "path": "experiments/gop/leaf.c",
+      "sha256": "9ae844c2bc92ee931e05ad091f7f2d70c035a6645708c4865444c93c490c04e7"
+    },
+    {
+      "path": "experiments/gop/leaf.h",
+      "sha256": "2a190ad01963cb7442d03d646014c234b2e7d5f7491e5706186dbcc00a8a36ea"
+    },
+    {
+      "path": "experiments/gop/patch.h",
+      "sha256": "39c54be614563cc09a745b98fe606697690fc88b5ca2804ac90c7850d883260e"
+    },
+    {
+      "path": "experiments/gop/reset.c",
+      "sha256": "64041a6e05bd13773023ec59d9cd092aa76c2efaf6acb197452fb47810c4c510"
+    },
+    {
+      "path": "experiments/gop/reset.h",
+      "sha256": "a455cac7a1828c91cddd559e3ca99a3354b76ec6f1807da453a92002a91d560f"
+    },
+    {
+      "path": "experiments/gop/test-external-profile.cmd",
+      "sha256": "2aed04a4a09349d57759a468419aa48dd1e8a61be874981237adbe0a2aa4703a"
+    },
+    {
+      "path": "experiments/gop/test-patch-state.cmd",
+      "sha256": "88f4df35c9f5024bb69fbaac2fb6c742be79ace173182d21f1d2d2296202d834"
+    },
+    {
+      "path": "experiments/gop/test-production.cmd",
+      "sha256": "dfec22ff21ada41d697a3753c6aeefd6222600a33a3f35aa4ccdfa2d630d2367"
+    },
+    {
+      "path": "experiments/gop/test-ssd.cmd",
+      "sha256": "0111dc6d5209eb0cc51daba8feec5044bc32bced276f83890800488b9fb0e5ca"
+    },
+    {
+      "path": "experiments/gop/test-visual.cmd",
+      "sha256": "96d0e4f8baa960869e647a8f5a3a50630e080741363154c554b279728991a87e"
+    },
+    {
+      "path": "experiments/gop/test-windows-check.ps1",
+      "sha256": "8a76c1c5eaf7ebd696ceedab9028d558fbe760ebd14a972a1df47548a3e4724e"
+    },
+    {
+      "path": "experiments/gop/test-windows.cmd",
+      "sha256": "89436760573769185f30a30c9b25fb44be2fbe051e6586e50110848c32203130"
+    },
+    {
+      "path": "experiments/gop/test.cmd",
+      "sha256": "c952b62bd4ffccf66bf9a3992cac95d27eebf667cdd41dd9a39d6f329967bb97"
+    },
+    {
+      "path": "experiments/gop/test_cycle.c",
+      "sha256": "589c667ae18e1fc0584a9329062104c6ac261aa52f4d13c6bf1172443ff1df3d"
+    },
+    {
+      "path": "experiments/gop/test_external_flow.c",
+      "sha256": "5fd0569c41c0703820e5a2bc9539bd437e67756b7c144e6a161b1d50ce8db3d2"
+    },
+    {
+      "path": "experiments/gop/test_full.c",
+      "sha256": "3773158ed34ae903407fd38e9e20f66e94f0f45a8fe03e7b37ccaa4f24f06750"
+    },
+    {
+      "path": "experiments/gop/test_io.c",
+      "sha256": "fb12bdefd88d9c37f5fa38bc55a9972b9b8fd14e381d87e29f0c93f71d823d04"
+    },
+    {
+      "path": "experiments/gop/test_leaf.c",
+      "sha256": "0a2180f1b00a10634ec386cbc359b53750da25d011a0a3796402721f0569a39f"
+    },
+    {
+      "path": "experiments/gop/test_patch.c",
+      "sha256": "0d14debee554833198eefa33201f2d030cf095b1f1b02f1a47cf56302a0f9083"
+    },
+    {
+      "path": "experiments/gop/test_patch_state.c",
+      "sha256": "8879ca6d237c244ae6f19034f0093f8fd6c45e3c0d3dffff9e4c14305eb150cf"
+    },
+    {
+      "path": "experiments/gop/test_quiet_io.c",
+      "sha256": "f04b42d51e90b83b2db9e2a0e3e9a7319d741f2d084ef31f2b74dc0ae4c31ac8"
+    },
+    {
+      "path": "experiments/gop/test_ssd_flow.c",
+      "sha256": "0c19f654e18695dc5d0671db2f55f177c3cc017c0a670ee2a6aa51c8e3cb77fe"
+    },
+    {
+      "path": "experiments/gop/test_timed_flr.c",
+      "sha256": "bb3ddc0b21fe63cf430b534df89ea66539b2268a5bf18d26ed9afe95c5800f96"
+    },
+    {
+      "path": "experiments/gop/test_tree.c",
+      "sha256": "959baa9b9c56232adfea43f97039873f8c234d96dbae49f4874c97cfff25ef2b"
+    },
+    {
+      "path": "experiments/gop/test_visual.c",
+      "sha256": "392e171b39396d4af32d40b669e46a5e93e84d36b813f09b7318248a3f03a570"
+    },
+    {
+      "path": "experiments/gop/test_windows.c",
+      "sha256": "b9f7d686a08e926fed81115a37539bb783f4756d2a2887c04d8914ad93db1536"
+    },
+    {
+      "path": "experiments/gop/tree.c",
+      "sha256": "06679e0eb7ab2e58c456f3264ca354366f8c219f569ca2bd10cc69ce31da03c1"
+    },
+    {
+      "path": "experiments/gop/tree.h",
+      "sha256": "3dc0b6eb715b5de90bf8744986b6475abc537fdcd37cf8265048d109bf9c8427"
+    },
+    {
+      "path": "experiments/gop/visual.c",
+      "sha256": "f20e834123d6552f56f87f030a88896b09fc277d561459f63e173cca49e98682"
+    },
+    {
+      "path": "experiments/gop/visual.h",
+      "sha256": "08997242d610798a1d70d6d8c010ad4706b1d31fe5896495ee69744f980ec51a"
+    },
+    {
+      "path": "experiments/gop/windows-check.ps1",
+      "sha256": "ff305598c3b7b0b61c4b541f36f5375fd1cccebf64c0925dd3ea47eb97ccd4bb"
+    },
+    {
+      "path": "experiments/gop/windows.c",
+      "sha256": "444984ec35b4da3631919d4d72b78b660f6f4be54c2bd86c87d68cc6aa747bfa"
+    },
+    {
+      "path": "experiments/gop/windows.h",
+      "sha256": "34e3b8ada93779cb870c5618ee9dfda8ca8b340bb2a894239994480c81d844d2"
     },
     {
       "path": "gpu_family.h",
@@ -2660,6 +2828,14 @@
     {
       "path": "results/benchmark.json",
       "sha256": "11681321992649cb2b2aab0c53044246b7b7a80b77c19cc397ad16cdc8c1889f"
+    },
+    {
+      "path": "results/v14-comparison.json",
+      "sha256": "14f281d0088ff185fac029af3f07f5685be7c4f77da43a79590b94f9984e4ec0"
+    },
+    {
+      "path": "scripts/build-gop-experiment.ps1",
+      "sha256": "103eb39f325055f86378d201f5411637bc800197c24097e1b8c23cc7b3e04f0f"
     },
     {
       "path": "scripts/build-probe.ps1",
@@ -2694,12 +2870,16 @@
       "sha256": "ea71a0ba22972f7848389bcf283d1f44d959e206dc03aa84afd07c5169111f12"
     },
     {
+      "path": "tools/package_gop_experiment.py",
+      "sha256": "845c0f767419c60d92d001e3194a5c1bf7d82001ec274bf5a893d9bb1ce41a60"
+    },
+    {
       "path": "tools/package_probe_usb.py",
       "sha256": "9f990ca5e95d2cb521023d03fa1ae47524c73495332b413c21308da7e272d8d5"
     },
     {
       "path": "tools/package_usb.py",
-      "sha256": "4a837f0ca18353adf0c6252a86accc7b4cd34f4d37e2f950714d886427133b75"
+      "sha256": "b5f9974af03e56ecc316c54d01bb4185e243f1db031e206b23cda919441acb9d"
     },
     {
       "path": "tools/probe-to-profile.py",
@@ -2710,12 +2890,20 @@
       "sha256": "af5480f7b2dc3e9b379b479427ee1b0664cd69d8fc0e00d94fec77f92b774cf1"
     },
     {
+      "path": "tools/runtime_profile.py",
+      "sha256": "a030403f359da97b7f4248f5f4c90af3f03e7c20cab631ef36944f4bfaa35efe"
+    },
+    {
       "path": "tools/source_manifest.py",
       "sha256": "ce875e837d5224b81a79d2586adb54cef1a474037754a551b500edc816a1efa4"
     },
     {
+      "path": "tools/test_gop_experiment.py",
+      "sha256": "91022bee3fec06e796d6e1e9be86eec0aa09a359d14b320c044397e4f9c0eaa5"
+    },
+    {
       "path": "tools/test_package_usb.py",
-      "sha256": "495a7463ef5b90d8c047ecd7b1a7ab13c53262a3b4c11c391a760c372893a288"
+      "sha256": "3e331d0e68bfdea02ed40a543d9a5de376d94bb73b449d71b69c200a9008e594"
     },
     {
       "path": "tools/test_probe_profile.py",
@@ -2726,8 +2914,12 @@
       "sha256": "ebd612a3564167763078e418f09e90908a154ba575139d07bee43033357cae46"
     },
     {
+      "path": "tools/test_runtime_profile.py",
+      "sha256": "3097185c115d31180b14a25af030eeba95cbc4ecb368882c1079693fdc5f42a3"
+    },
+    {
       "path": "unlock/app.c",
-      "sha256": "b151e46af3d052a6866fb9119804e317efef5e13727cf5cf500844bb7c9bf2d7"
+      "sha256": "8eb80777070d60c80276566255d9260ee01451f8b788b0dc3feaaebceac11e6d"
     },
     {
       "path": "unlock/app.h",
@@ -2735,15 +2927,19 @@
     },
     {
       "path": "unlock/app_io.c",
-      "sha256": "e8073f2385fbd5913b27d138e5d5936425e1f5913072791262d9e26caaa8fbd3"
+      "sha256": "8647f8e41aa2044c20812edb98ef079ab0198b1e03f8af981598ffe25f7f2049"
     },
     {
       "path": "unlock/app_io.h",
-      "sha256": "8bc26d9091c243aa8cf09f5d6a8628f47721cabe8a453062f14fc4e9f055fce4"
+      "sha256": "f7311fec16413144ab3fba789bc22a014cbacd3dfd8c807f90f3a2584b36ffb1"
     },
     {
       "path": "unlock/assets.json",
       "sha256": "644849b375f7c37f0a46118aac1d55c8c1428b0c29cc017fcaa94b462cc924b0"
+    },
+    {
+      "path": "unlock/boot_source.h",
+      "sha256": "6526e2ccda5ce11158a938881d0529db35f7d33799026e10c2d4356fe0bf800e"
     },
     {
       "path": "unlock/build.ps1",
@@ -2835,11 +3031,11 @@
     },
     {
       "path": "unlock/port.c",
-      "sha256": "4c8fceb36f285d0f7473a1b69165fc23a1f2c307c79c49117d2b7699e4ccb1ac"
+      "sha256": "210956e303a45d9263419f7ee601b4b64d758fe552b7690afff13382295ea1c0"
     },
     {
       "path": "unlock/port.h",
-      "sha256": "93df960f2b20c1d062cbac6a7d6c61026c8d5d07b47f1f4430f19a4d38ccb792"
+      "sha256": "ebe40af8194cdf518a403fda95f3d11ca25e324e3503b058fc244c72d53d1acc"
     },
     {
       "path": "unlock/runtime.c",
@@ -2848,6 +3044,14 @@
     {
       "path": "unlock/runtime.h",
       "sha256": "da642d486d61f6600ced44bc5efad0bd95eba9e2a9a313f0a90f5aad81e6587e"
+    },
+    {
+      "path": "unlock/runtime_profile.c",
+      "sha256": "6bc432b375e19ab60d999022d12c07ef1bce678a0a588c671c841af96b0610d5"
+    },
+    {
+      "path": "unlock/runtime_profile.h",
+      "sha256": "f75726bc2f59ac7d7b4110b96426a2c26808f8f9d6aea2f651490a35ef415859"
     },
     {
       "path": "unlock/sha256.c",
@@ -2859,7 +3063,7 @@
     },
     {
       "path": "unlock/test-all.ps1",
-      "sha256": "2661041af35aa5888180e78e5ce7a008378ef57b6a56186c5ae077b451d5effd"
+      "sha256": "1ee18a9bfdfaa1ea80242fca5f8d1e49342470e58d4092f7ed59f51737166163"
     },
     {
       "path": "unlock/test-app.cmd",
@@ -2911,7 +3115,7 @@
     },
     {
       "path": "unlock/tests/test_app.c",
-      "sha256": "161c6fdf721d1b6113681c545942248aa1df8cdcf58282cffab4e7b09b98afc0"
+      "sha256": "b7d581beb9f2ad67afbac9b670fb8203317571f4226eacdd422189b721fb9d4b"
     },
     {
       "path": "unlock/tests/test_checks.c",
@@ -2944,6 +3148,10 @@
     {
       "path": "unlock/tests/test_runtime.c",
       "sha256": "a2dd350fa47ad9a2cc5070f248c3165a697ed99d0eabad5d195d136a62fe9bc2"
+    },
+    {
+      "path": "unlock/tests/test_runtime_profile.c",
+      "sha256": "708c58b86824183685f3c224a0d10f817d7f12d06f0084d8c921797b7bd534ee"
     },
     {
       "path": "unlock/tests/test_sha256.c",
@@ -3043,7 +3251,7 @@
     },
     {
       "path": "unlock/vendor/unlock_610.c",
-      "sha256": "2871597e59584c5cf6280952f9efbbcc7d09129cd063f57fc5a7d6a34e004bee"
+      "sha256": "d3ddd1896fe9abd960153499cc9a4d9c0f0fba2558d51ff89487dc4ab8fb4aa3"
     },
     {
       "path": "unlock/vendor/unlock_610.h",

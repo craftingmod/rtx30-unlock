@@ -90,7 +90,7 @@ def prepare(root, assets, output):
     with tempfile.TemporaryDirectory(prefix='.usb-stage-', dir=output.parent) as temporary:
         stage = Path(temporary) / 'package'
         boot = stage / 'EFI/BOOT'
-        payload = stage / 'RTX3080-UNLOCK'
+        payload = stage / 'RTX-UNLOCK'
         asset_target = payload / 'ASSETS'
         notices = payload / 'LICENSES'
         for directory in (boot, asset_target, notices):

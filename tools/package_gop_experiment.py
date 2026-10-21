@@ -76,34 +76,35 @@ def package(output, root=ROOT, assets=None, profile=None):
         stage = Path(temporary) / 'usb'
         boot = stage / 'EFI/BOOT'
         boot.mkdir(parents=True)
-        marker = stage / 'RTX30-GOP-TEST'
+        marker = stage / 'RTX-UNLOCK'
         marker.mkdir()
         (marker / 'README.txt').write_text(
             'Keep this directory on the USB root. The EFI requires it before any detach.\n'
-            'Per-boot diagnostics are saved in RUN00 through RUN99.\n', encoding='utf-8')
+            'Per-boot diagnostics: RUN00 through RUN99, GOP.TXT and UNLOCK.TXT in the same RUN directory.\n', encoding='utf-8')
         if manifest.get('Production'):
             (marker / 'README.txt').write_text(
                 'Production: automatic unlock and Windows handoff after checks.\n'
                 'The SSD experiment build also accepts GPT EFI System Partitions.\n'
                 'No RUN folders or reports are created by default.\n'
                 'Create an empty DEBUG.ON in this directory for detailed reports and manual U approval.\n'
+                'Both logs share one RUNnn directory: GOP.TXT and UNLOCK.TXT.\n'
                 'Remove DEBUG.ON after diagnosis to stop log accumulation.\n', encoding='utf-8')
         if profile_data is not None:
             (marker / 'PROFILE.BIN').write_bytes(profile_data)
             # First experiments ship with reports and explicit approval enabled.
             (marker / 'DEBUG.ON').touch()
             with (marker / 'README.txt').open('a', encoding='utf-8') as instructions:
-                instructions.write('v17: PROFILE.BIN is mandatory on this EFI volume. Missing/invalid profiles stop before GPU detach.\n'
+                instructions.write('v18: PROFILE.BIN is mandatory on this EFI volume. Missing/invalid profiles stop before GPU detach.\n'
                                    'Replace PROFILE.BIN with tools/runtime_profile.py output for another captured environment.\n'
                                    'DEBUG.ON is included for the first test; U is required even on the already-applied skip path.\n')
         shutil.copyfile(build / 'BOOTX64.EFI', boot / 'BOOTX64.EFI')
         if mode == 'full-unlock':
-            asset_target = stage / 'RTX3080-UNLOCK/ASSETS'
+            asset_target = stage / 'RTX-UNLOCK/ASSETS'
             asset_target.mkdir(parents=True)
             (asset_target / 'README.txt').write_text(
                 'Copy the five verified unlock/assets.json files here before boot.\n'
                 'The EFI checks sizes and SHA256 before U and before driver detach.\n'
-                'Transaction details: RTX3080-UNLOCK/RUNxx/REPORT.TXT.\n', encoding='utf-8')
+                'Logs: RTX-UNLOCK/RUNnn/GOP.TXT and UNLOCK.TXT (same RUN number).\n', encoding='utf-8')
             if assets is not None:
                 for spec in json.loads((root / 'unlock/assets.json').read_text(encoding='utf-8')):
                     source = Path(assets) / spec['Name']
@@ -153,7 +154,7 @@ def archive(directory, output):
         raise ValueError('ZIP output must be outside the package directory')
     if output.exists() or output.is_symlink() or not output.parent.is_dir():
         raise ValueError('Choose a new ZIP file in an existing parent')
-    required = ('EFI/BOOT/BOOTX64.EFI', 'RTX30-GOP-TEST/README.txt')
+    required = ('EFI/BOOT/BOOTX64.EFI', 'RTX-UNLOCK/README.txt')
     for name in required:
         if not (directory / name).is_file():
             raise ValueError('Incomplete USB package: ' + name)

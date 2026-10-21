@@ -78,3 +78,5 @@ GOP v15 production 경로는 `experiments/gop/test-production.cmd`로 검사한�
 GOP v16/v17은 `experiments/gop/test-ssd.cmd`로 실제 셀렉터 읽기 정책 6개와 기존 적용 후 관측 10개, 실제 자산 IO의 GPT ESP 허용/일반 파티션·프로토콜 부재·잘못된 revision 거부, 실제 앱 흐름 9개를 검사한다. SS0 스킵/적용, 사전/transaction 실패, DEBUG.ON의 U 승인·Esc·시간 초과 및 스킵 시 승인도 검사한다. GPU·펌웨어 실행은 모의 처리하며 SSD에 쓰지 않는다.
 
 v17은 `experiments/gop/test-external-profile.cmd`로 Python이 검증·생성한 5개 GA10x 프로필을 **같은 C 실행 파일**에서 읽는다. 매 바이트 손상/잘림, 길이/버전/칩/PCI/BAR/FB/MMU/WPR2 오류, 파일 metadata/read/Close 오류와 추가 데이터 거부를 확인하고 실제 PCI/SubSystem/BDF/FLR·레이아웃 검사를 재사용한다. 실제 v17 앱 진입점의 프로필 필수 검사·무로그 자동 진행·DEBUG.ON의 U/Esc/시간 초과·스킵 승인 흐름 8개도 모의 검사한다. `tools/test_runtime_profile.py`는 캡처 대조와 wire 형식을, `tools/test_gop_experiment.py`는 EFI 바이트를 그대로 유지한 프로필 교체·DEBUG.ON 포함·잘못된 입력의 패키지 미생성을 확인한다. 상세 형식과 실기 미검증 범위는 [외부 프로필](docs/EXTERNAL-PROFILE.md)을 참고한다.
+
+v18은 같은 검사에 통합 경로를 추가한다. GOP 로거는 `RTX-UNLOCK`의 기존 RUN을 건너뛰고 고른 번호를 context에 전달한다. Unlock의 실제 파일 IO 검사는 지정된 RUN07을 새로 만들지 않고 열어 UNLOCK.TXT만 생성하는지, 누락 RUN·잘못된 번호·파일을 디렉터리로 사용·기존 UNLOCK.TXT를 거부하는지 확인한다. GOP.TXT 덮어쓰기 거부와 RUN00–99 포화 중단도 검사한다. 패키지 검사는 새 폴더에 ASSETS/PROFILE.BIN/DEBUG.ON이 모이고 과거 두 폴더가 생성되지 않는지 확인한다. 무로그 모드는 RUN을 조회하거나 만들지 않는다.
