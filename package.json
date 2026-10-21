@@ -1,0 +1,16 @@
+{
+  "name": "rtx3080-unlock-public",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "format": "bun tools/format.ts",
+    "format:check": "bun tools/format.ts --check"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  }
+}

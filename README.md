@@ -73,6 +73,19 @@ USB 템플릿에는 EFI, 소스, 사용법과 라이선스가 들어 있습니�
 
 ## 빌드와 검사
 
+### 코드 포맷
+
+clang-format 19 이상과 Bun을 사용합니다. 기존 코드에 맞춰 공백 2칸, 최대 100열을 기준으로 하며 include 순서는 유지합니다.
+
+```powershell
+bun run format        # 포맷 적용
+bun run format:check  # 변경 없이 검사 (불일치 시 실패)
+```
+
+clang-format은 `PATH`에서 찾으며 `LLVM_BIN`으로 설치 폴더를 지정할 수 있습니다. Git 추적 C/C++/CUDA 파일을 대상으로 하고, `.clang-format-ignore`에 지정한 외부 코드(`deps/`, `unlock/vendor/`), 고정 비교 스냅샷(`unlock/tests/reference/`), 생성물은 제외합니다. 새 소스 파일은 Git에 추가한 뒤 실행하세요. 포맷 적용 후 릴리스 패키지를 만들 때는 [소스 manifest 갱신 절차](TESTING.md#소스와-패키지-해시)를 따릅니다.
+
+### 빌드 실행
+
 Windows 개발 환경: LLVM/clang 12 + lld-link(VS2019 BuildTools), MSVC 환경(VS2022 Community), Python 3.9 이상. 스크립트의 기본 도구 경로는 이 설치 구성을 기준으로 합니다.
 
 ```powershell

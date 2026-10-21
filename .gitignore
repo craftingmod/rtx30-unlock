@@ -32,3 +32,6 @@ Thumbs.db
 
 captures/**
 !captures/README.md
+
+# Bun
+node_modules

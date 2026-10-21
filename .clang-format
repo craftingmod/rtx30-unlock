@@ -1,0 +1,11 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+UseTab: Never
+LineEnding: LF
+ColumnLimit: 100
+BreakBeforeBraces: Attach
+PointerAlignment: Right
+SortIncludes: Never
+IncludeBlocks: Preserve
+AllowShortIfStatementsOnASingleLine: WithoutElse
+ReflowComments: false
