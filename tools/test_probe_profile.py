@@ -189,7 +189,7 @@ class Profiles(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'GA10x'):
                     check(path, experimental=True)
 
-    @unittest.skipUnless((ROOT / 'build/probe-test-report.txt').exists(), 'Run test.cmd for emitted-report integration')
+    @unittest.skipUnless((ROOT / 'build/probe-test-report.txt').exists(), 'Run bun tools/test.ts probe for emitted-report integration')
     def test_actual_c_report_format(self):
         captured = ROOT / 'build/probe-test-report.txt'
         profile = generate(captured, self.prom)

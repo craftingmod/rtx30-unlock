@@ -9,7 +9,7 @@ endif
 
 .PHONY: probe profile test unlock probe-usb
 probe:
-	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-probe.ps1
+	bun tools/build-probe.ts
 
 profile:
 	python tools/probe-to-profile.py --report "$(REPORT)" --prom "$(PROM)" --output "$(PROFILE)"
@@ -18,7 +18,7 @@ probe-usb: probe
 	python tools/package_probe_usb.py --output "$(OUTPUT)"
 
 test:
-	powershell.exe -NoProfile -ExecutionPolicy Bypass -File unlock/test-all.ps1
+	bun tools/test.ts
 
 unlock:
 	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-unlock.ps1 -Profile "$(PROFILE)" $(UNLOCK_FLAGS)

@@ -35,3 +35,4 @@ captures/**
 
 # Bun
 node_modules
+/build*

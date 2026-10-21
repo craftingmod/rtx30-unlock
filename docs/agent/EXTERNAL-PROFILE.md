@@ -25,7 +25,7 @@ python tools/package_gop_experiment.py --output build/gop-experiment-v20-quiet-p
 DEBUG ON 수집은 비어 있는 PROBE00–PROBE99를 선택해 INVENTORY.TXT, REPORT.TXT, PROM.BIN, 사용 가능한 ROMIMAGE.BIN을 저장·재검증한다. 슬롯이 모두 사용 중이면 중단한다. DEBUG OFF는 슬롯 사용량과 무관하며, REPORT 해시는 메모리에서 작성한 보고서에 대응한다. 저장된 원본이 없어 Python으로 동일 캡처를 재검증·재생성할 수 없다.
 
 ```powershell
-cmd /c experiments\gop\test-auto-profile.cmd
+bun tools/test.ts auto-profile-runtime
 ```
 
 호스트 테스트는 C/Python 바이너리 일치, DEBUG OFF 무캡처 저장, 실제 PROM 비교, 승인 전 프로필 보존, 승인 후 교체·재검증, U/Esc/시간 초과·읽기·저장 오류를 검사한다. 자동 생성은 펌웨어 호환성·GPU 안정성 인증이 아니며 실제 GPU 쓰기·Windows 연결 부팅은 실기 확인이 필요하다.
@@ -87,10 +87,10 @@ SHA256은 **손상 검출**이며 서명이 아니다. EFI는 PC에서의 캡처
 ## 검증
 
 ```powershell
-python -m unittest discover -s tools -p "test_*.py" -v
-cmd /c experiments\gop\test-external-profile.cmd
-cmd /c experiments\gop\test-production.cmd
-cmd /c experiments\gop\test-ssd.cmd
+bun tools/test.ts python
+bun tools/test.ts gop-external-profile
+bun tools/test.ts gop-production
+bun tools/test.ts gop-ssd
 ```
 
 이 검사는 모의 펌웨어와 캡처 fixture를 사용하며 실제 GPU 쓰기·FLR·Windows 실행은 하지 않는다. v17의 현재 환경 적용은 사용자 성공 보고와 로그로 확인했다. v18의 통합 경로·스킵·무로그 실행·다른 카드 지원·반복 안정성은 실기 미검증이다.

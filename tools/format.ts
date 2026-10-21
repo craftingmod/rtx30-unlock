@@ -19,8 +19,7 @@ const untrackedSrc = Bun.spawnSync(
   ["git", "ls-files", "--others", "--exclude-standard", "-z", "--", "src"],
   { cwd: root },
 )
-if (untrackedSrc.exitCode !== 0)
-  throw new Error(untrackedSrc.stderr.toString())
+if (untrackedSrc.exitCode !== 0) throw new Error(untrackedSrc.stderr.toString())
 // Apply exclusions before invoking clang-format, including on Windows.
 const ignored = (await Bun.file(resolve(root, ".clang-format-ignore")).text())
   .split(/\r?\n/)

@@ -64,8 +64,9 @@ try {
         'src/gop/full.h', 'src/gop/reset.h', 'src/gop/test_full.c',
         'src/gop/patch.h', 'src/gop/visual.h',
         'src/gop/test_patch.c', 'src/gop/test_patch_state.c', 'src/gop/test_cycle.c', 'src/gop/test_io.c',
-        'experiments/gop/test.cmd', 'experiments/gop/README.md', 'src/unlock/format.h', 'src/unlock/runtime.h',
-        'scripts/build-gop-experiment.ps1', 'scripts/toolchain.ps1', 'scripts/host-env.cmd',
+        'tools/test.ts', 'tools/test_support.ts', 'tools/build-gop-experiment.ts', 'tools/build-probe.ts', 'tools/build.ts',
+        'experiments/gop/README.md', 'src/unlock/format.h', 'src/unlock/runtime.h',
+        'scripts/build-gop-experiment.ps1', 'scripts/toolchain.ps1',
         'unlock/verify_pe.py','src/unlock/boot_source.h'
     ) + @(Get-ChildItem deps/edk2/MdePkg/Include -Recurse -File | ForEach-Object {
         $_.FullName.Substring($root.Length+1).Replace('\','/')
@@ -73,17 +74,17 @@ try {
     # Ship both cores so the bundled host tests remain runnable in either build mode.
     $records += @('src/gop/cycle.c', 'src/gop/tree.c', 'src/gop/leaf.c', 'src/gop/full.c', 'src/gop/reset.c')
     if ($FullUnlock) {
-        $records += @('src/gop/visual.h','src/gop/test_visual.c','src/gop/test_timed_flr.c','experiments/gop/test-visual.cmd','experiments/gop/test-patch-state.cmd','unlock/assets.json','src/probe/gpu_family.h','tools/check_profile.py','tools/probe_profile.py','tools/gpu_family.py')
+        $records += @('src/gop/visual.h','src/gop/test_visual.c','src/gop/test_timed_flr.c','unlock/assets.json','src/probe/gpu_family.h','tools/check_profile.py','tools/probe_profile.py','tools/gpu_family.py')
         if (-not $ExternalProfile) { $records += @('build/gop-experiment/profile.h','build/gop-experiment/board.json') }
         $records += @(Get-ChildItem src/unlock -Recurse -File | Where-Object {
             $_.Extension -in '.c','.h' -and $_.FullName -notlike '*\build\*'
         } | ForEach-Object { $_.FullName.Substring($root.Length+1).Replace('\','/') })
     }
-    if ($WindowsHandoff) { $records += @('src/gop/windows.h','src/gop/test_windows.c','experiments/gop/test-windows.cmd','experiments/gop/windows-check.ps1','experiments/gop/test-windows-check.ps1','src/gop/compute-benchmark.cu','analysis/build-benchmark.cmd','results/benchmark.json') }
-    if ($Production) { $records += @('experiments/gop/test-production.cmd','src/gop/test_quiet_io.c') }
-    if ($SsdExperiment) { $records += @('experiments/gop/test-ssd.cmd','src/gop/test_ssd_flow.c') }
-    if ($ExternalProfile) { $records += @('tools/runtime_profile.py','tools/test_runtime_profile.py','tools/test_probe_profile.py','src/unlock/tests/test_runtime_profile.c','experiments/gop/test-external-profile.cmd','src/gop/test_external_flow.c','docs/EXTERNAL-PROFILE.md') }
-    if ($AutoProfile) { $records += @('src/probe/probe_core.h','src/probe/probe_profile.h','src/probe/test_core.c','test.cmd','experiments/gop/test-auto-profile.cmd','src/gop/test_auto_profile.c','src/gop/test_auto_capture.c','src/gop/test_auto_flow.c') }
+    if ($WindowsHandoff) { $records += @('src/gop/windows.h','src/gop/test_windows.c','experiments/gop/windows-check.ps1','src/gop/compute-benchmark.cu','analysis/build-benchmark.cmd','results/benchmark.json') }
+    if ($Production) { $records += @('src/gop/test_quiet_io.c') }
+    if ($SsdExperiment) { $records += @('src/gop/test_ssd_flow.c') }
+    if ($ExternalProfile) { $records += @('tools/runtime_profile.py','tools/test_runtime_profile.py','tools/test_probe_profile.py','src/unlock/tests/test_runtime_profile.c','src/gop/test_external_flow.c','docs/EXTERNAL-PROFILE.md') }
+    if ($AutoProfile) { $records += @('src/probe/probe_core.h','src/probe/probe_profile.h','src/probe/test_core.c','src/gop/test_auto_profile.c','src/gop/test_auto_capture.c','src/gop/test_auto_flow.c') }
     $records = @($records | Sort-Object -Unique)
     [ordered]@{
         BuiltUtc=[DateTime]::UtcNow.ToString('o'); HardwareTested=$false; WindowsHandoff=[bool]$WindowsHandoff; Production=[bool]$Production; SsdExperiment=[bool]$SsdExperiment

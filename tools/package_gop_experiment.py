@@ -48,17 +48,17 @@ def package(output, root=ROOT, assets=None, profile=None):
         if mode != 'full-unlock':
             raise ValueError('Windows handoff requires full-unlock mode')
         required.update({'src/gop/windows.c', 'src/gop/windows.h',
-                         'src/gop/test_windows.c', 'experiments/gop/test-windows.cmd',
+                         'src/gop/test_windows.c', 'tools/test.ts',
                          'experiments/gop/windows-check.ps1', 'src/gop/compute-benchmark.cu',
                          'analysis/build-benchmark.cmd', 'results/benchmark.json'})
     if manifest.get('Production'):
         if not manifest.get('WindowsHandoff') or mode != 'full-unlock':
             raise ValueError('Production requires Windows handoff and full-unlock')
-        required.update({'experiments/gop/test-production.cmd', 'src/gop/test_quiet_io.c'})
+        required.update({'tools/test.ts', 'src/gop/test_quiet_io.c'})
     if manifest.get('SsdExperiment'):
         if not manifest.get('Production') or not manifest.get('WindowsHandoff') or mode != 'full-unlock':
             raise ValueError('SSD experiment requires production Windows handoff')
-        required.update({'src/unlock/boot_source.h', 'experiments/gop/test-ssd.cmd', 'src/gop/test_ssd_flow.c'})
+        required.update({'src/unlock/boot_source.h', 'tools/test.ts', 'src/gop/test_ssd_flow.c'})
     if manifest.get('AutoProfile'):
         if not manifest.get('ExternalProfile'):
             raise ValueError('Auto profile requires external-profile mode')

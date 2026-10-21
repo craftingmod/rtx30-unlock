@@ -178,7 +178,7 @@ make profile REPORT=probe/REPORT.TXT PROM=probe/PROM.BIN
 
 ### Phase 4 — `make test`: 호환성 및 회귀 검사
 
-1. **Host/mock 테스트:** 기존 `src/probe/test_core.c`, `src/unlock/tests/`, `unlock/test-all.ps1` 활용.
+1. **Host/mock 테스트:** 기존 `src/probe/test_core.c`, `src/unlock/tests/`, `bun tools/test.ts` 활용.
 2. **Probe 테스트:** 서로 다른 PCI ID, 복수 GPU, BAR 크기 오류, 접근 불가 MMIO, USB 로그 실패.
 3. **Profile 테스트:** 누락·손상된 REPORT/PROM, 중복 키, 다른 VBIOS 해시, 미지원 아키텍처.
 4. **Unlock 사전검사:** 대상 GPU의 PCI/SubVendor/SubDevice, 칩 식별, 메모리 레이아웃, PROM 해시, 펌웨어 자산 해시, 초기 레지스터, 디스플레이 소유권, DMA 매핑 가능 여부 검증.
@@ -227,7 +227,7 @@ profile:
 	python tools/probe-to-profile.py --report "$(REPORT)" --prom "$(PROM)" --output profiles/board.json
 
 test:
-	powershell.exe -NoProfile -ExecutionPolicy Bypass -File unlock/test-all.ps1
+	bun tools/test.ts
 
 unlock:
 	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-unlock.ps1 -Profile profiles/board.json

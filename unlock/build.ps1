@@ -41,4 +41,4 @@ $inputs = @($inputFiles | Where-Object {
     Edk2Commit='c1415771ac592ad8509351c46cd3cda4f38d7d52'; Sources=$inputs;
     HardwareTested=$false
 } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 -LiteralPath 'build/build-manifest.json'
-Write-Output 'Built and inspected locally. Run test-all.ps1, then tools/package_usb.py to prepare a local USB directory.'
+Write-Output 'Built and inspected locally. Run `bun run test`, then tools/package_usb.py to prepare a local USB directory.'
