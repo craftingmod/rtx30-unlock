@@ -3,7 +3,12 @@
 import { inflateRawSync } from "node:zlib"
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { loadManifest, loadTarArchive, readTarMember, sha256 } from "./common.ts"
+import {
+  loadManifest,
+  loadTarArchive,
+  readTarMember,
+  sha256,
+} from "./common.ts"
 
 const MAGIC = 0x314c5442
 const PINNED: Record<string, string> = {
@@ -246,9 +251,9 @@ async function extractAssets(
   )
 }
 
-async function main(): Promise<void> {
-  const [sourcePath, output] = process.argv.slice(2)
-  if (!sourcePath || !output || process.argv.length !== 4) {
+export async function extractBootAssets(args: string[]): Promise<void> {
+  const [sourcePath, output] = args
+  if (!sourcePath || !output || args.length !== 2) {
     throw new Error(
       "Usage: bun tools/firmware/extract_boot_assets.ts SOURCE_DIR|SOURCE.tar.xz OUTPUT",
     )
@@ -256,9 +261,10 @@ async function main(): Promise<void> {
   await extractAssets(sourcePath, output)
 }
 
-main().catch((error: unknown) => {
-  console.error(
-    `extract failed: ${error instanceof Error ? error.message : error}`,
-  )
-  process.exitCode = 1
-})
+if (import.meta.main)
+  extractBootAssets(process.argv.slice(2)).catch((error: unknown) => {
+    console.error(
+      `extract failed: ${error instanceof Error ? error.message : error}`,
+    )
+    process.exitCode = 1
+  })

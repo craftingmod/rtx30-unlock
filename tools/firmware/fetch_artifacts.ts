@@ -106,8 +106,7 @@ async function fetchArtifact(
   }
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2)
+export async function fetchArtifacts(args: string[]): Promise<void> {
   const offline = args.includes("--offline")
   const positional = args.filter((arg) => arg !== "--offline")
   if (positional.length !== 1) {
@@ -120,9 +119,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(
-    `fetch failed: ${error instanceof Error ? error.message : error}`,
-  )
-  process.exitCode = 1
-})
+if (import.meta.main)
+  fetchArtifacts(process.argv.slice(2)).catch((error: unknown) => {
+    console.error(
+      `fetch failed: ${error instanceof Error ? error.message : error}`,
+    )
+    process.exitCode = 1
+  })

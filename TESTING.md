@@ -26,7 +26,6 @@ bun tools/test.ts gop-cycle # 단일 검사 묶음 예시
 
 - `build/firmware-assets/`: `bun run firmware:assets`로 생성합니다.
 - `build/PROM.BIN`: 로컬 PROM 캡처(1 MiB)를 이 경로에 둡니다. 루트에 `PROM.BIN`이 있으면 `Copy-Item .\PROM.BIN .\build\PROM.BIN`으로 복사할 수 있습니다.
-- `evidence/boot-03/REPORT.TXT`: 저장소에 포함된 테스트 입력입니다.
 
 준비한 뒤 다음 명령으로 전체 검사를 실행합니다.
 

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import { createHash } from "node:crypto"
 import { createReadStream } from "node:fs"
-
-export const MANIFEST = `${import.meta.dir}/artifacts-610.43.03.json`
+import manifest from "./artifacts-610.43.03.json"
 
 export type Artifact = {
   filename: string
@@ -17,7 +16,7 @@ export type FirmwareManifest = {
 }
 
 export async function loadManifest(): Promise<FirmwareManifest> {
-  return (await Bun.file(MANIFEST).json()) as FirmwareManifest
+  return manifest as FirmwareManifest
 }
 
 export function sha256(data: Uint8Array): string {
@@ -36,13 +35,15 @@ export async function loadTarArchive(
   const compressed = await Bun.file(archivePath).bytes()
   let tarball = compressed
   if (archivePath.endsWith(".zst")) {
-    tarball = await Bun.zstdDecompress(compressed) as Uint8Array<ArrayBuffer>
+    tarball = (await Bun.zstdDecompress(compressed)) as Uint8Array<ArrayBuffer>
   } else if (archivePath.endsWith(".xz")) {
     // xz-compat can install optional native bindings; use its JS decoder only.
     process.env.LZMA_NATIVE_DISABLE = "1"
     const { decodeXZ } = await import("xz-compat")
     const decoded = await decodeXZ(Buffer.from(compressed))
-    tarball = (Buffer.isBuffer(decoded) ? decoded : decoded.toBuffer()) as Uint8Array<ArrayBuffer>
+    tarball = (
+      Buffer.isBuffer(decoded) ? decoded : decoded.toBuffer()
+    ) as Uint8Array<ArrayBuffer>
   }
   return new Bun.Archive(tarball)
 }

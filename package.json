@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "build": "bun tools/build.ts",
+    "build:zip": "bun tools/build-zip.ts",
+    "build:firmware-exe": "bun build --compile --target=bun-windows-x64 tools/firmware/exe.ts --outfile build/firmware-assets.exe",
     "test": "bun tools/test.ts",
     "firmware:assets": "bun tools/firmware/build_assets.ts build/firmware-assets",
     "format": "bun run format:c && bun run format:ts",

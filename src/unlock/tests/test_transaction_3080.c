@@ -20,7 +20,7 @@ static void transaction_assert_failed(const char *expression, const char *file, 
   ((expression) ? (void)0 : transaction_assert_failed(#expression, __FILE__, __LINE__))
 #include "../vendor/unlock_610.c"
 #include "vbios_fixture.h"
-/* Captured MSI 10de:2206 / 1462:3890 profile: evidence/boot-03/REPORT.TXT. */
+/* MSI 10de:2206 / 1462:3890 transaction fixture. */
 static u32 regs[0x1000000 / 4];
 static const u32 captured_bars[6] = {0x84000000, 0x0000000c, 0x00000060,
                                      0x0000000c, 0x00000064, 0x00005001};

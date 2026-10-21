@@ -53,9 +53,9 @@ function buildPayload(): Buffer {
   return payload
 }
 
-async function main(): Promise<void> {
-  const [packagePath, output] = process.argv.slice(2)
-  if (!packagePath || !output || process.argv.length !== 4) {
+export async function generateV67(args: string[]): Promise<void> {
+  const [packagePath, output] = args
+  if (!packagePath || !output || args.length !== 2) {
     throw new Error("Usage: bun tools/firmware/generate_v67.ts PACKAGE OUTPUT")
   }
 
@@ -104,9 +104,10 @@ async function main(): Promise<void> {
   ])
 }
 
-main().catch((error: unknown) => {
-  console.error(
-    `generate failed: ${error instanceof Error ? error.message : error}`,
-  )
-  process.exitCode = 1
-})
+if (import.meta.main)
+  generateV67(process.argv.slice(2)).catch((error: unknown) => {
+    console.error(
+      `generate failed: ${error instanceof Error ? error.message : error}`,
+    )
+    process.exitCode = 1
+  })

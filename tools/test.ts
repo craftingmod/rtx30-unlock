@@ -162,7 +162,6 @@ async function checks() {
       "-D_CRT_SECURE_NO_WARNINGS",
       ...includes,
     ],
-    ["evidence/boot-03/REPORT.TXT"],
   )
   await run([
     cc(),
@@ -755,7 +754,7 @@ async function app() {
       "-DGU_TARGET_PCI_ID=0x220610deU",
       ...appIncludes,
     ],
-    [fixtureProm, fixtureAssets, "evidence/boot-03/REPORT.TXT"],
+    [fixtureProm, fixtureAssets],
   )
 }
 

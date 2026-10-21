@@ -27,3 +27,21 @@ bun run build
 ```
 
 The EFI image is written to `build/efi/BOOTX64.EFI`.
+
+### Build EFI zip
+
+```sh
+bun run firmware:assets
+bun run build:zip
+```
+
+It contains `EFI/BOOT/BOOTX64.EFI`, `RTX-UNLOCK/UNLOCK.md`, and, when
+`build/firmware-assets` exists, its contents under `RTX-UNLOCK/ASSETS/`.
+
+### Firmware extractor
+
+```sh
+bun run build:firmware-exe
+```
+Run the EXE from the USB drive root to download and generate firmware in
+`RTX-UNLOCK/ASSETS`.

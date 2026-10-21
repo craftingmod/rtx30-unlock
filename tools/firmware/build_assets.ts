@@ -2,32 +2,24 @@
 // SPDX-License-Identifier: GPL-2.0-only
 import { resolve } from "node:path"
 import { loadManifest } from "./common.ts"
+import { fetchArtifacts } from "./fetch_artifacts.ts"
+import { generateV67 } from "./generate_v67.ts"
+import { extractBootAssets } from "./extract_boot_assets.ts"
 
 const root = resolve(import.meta.dir, "../..")
-const cache = resolve(root, "build/firmware-inputs")
-
-async function run(script: string, args: string[]): Promise<void> {
-  const child = Bun.spawn(
-    [process.execPath, resolve(import.meta.dir, script), ...args],
-    {
-      cwd: root,
-      stdout: "inherit",
-      stderr: "inherit",
-    },
-  )
-  const status = await child.exited
-  if (status !== 0) throw new Error(`${script} failed with exit code ${status}`)
-}
-
-async function main(): Promise<void> {
-  const [outputArg] = process.argv.slice(2)
-  if (process.argv.length > 3) {
+export async function buildAssets(
+  args: string[],
+  workingRoot = root,
+): Promise<void> {
+  const [outputArg] = args
+  if (args.length > 1) {
     throw new Error(
       "Usage: bun tools/firmware/build_assets.ts [OUTPUT_DIRECTORY]",
     )
   }
 
-  const output = resolve(root, outputArg ?? "build/firmware-assets")
+  const output = resolve(workingRoot, outputArg ?? "build/firmware-assets")
+  const cache = resolve(workingRoot, "build/firmware-inputs")
   const manifest = await loadManifest()
   const [source, , packageArtifact] = manifest.source_artifacts
   if (!source?.filename || !packageArtifact?.filename) {
@@ -36,16 +28,16 @@ async function main(): Promise<void> {
     )
   }
 
-  await run("fetch_artifacts.ts", [cache])
-  await run("generate_v67.ts", [
-    resolve(cache, packageArtifact.filename),
-    output,
-  ])
-  await run("extract_boot_assets.ts", [resolve(cache, source.filename), output])
+  await fetchArtifacts([cache])
+  await generateV67([resolve(cache, packageArtifact.filename), output])
+  await extractBootAssets([resolve(cache, source.filename), output])
   console.log(`EFI firmware assets ready: ${output}`)
 }
 
-main().catch((error: unknown) => {
-  console.error(`firmware assets failed: ${error instanceof Error ? error.message : error}`)
-  process.exitCode = 1
-})
+if (import.meta.main)
+  buildAssets(process.argv.slice(2)).catch((error: unknown) => {
+    console.error(
+      `firmware assets failed: ${error instanceof Error ? error.message : error}`,
+    )
+    process.exitCode = 1
+  })

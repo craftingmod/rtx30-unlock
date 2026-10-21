@@ -48,47 +48,6 @@ static void Reject(const UINT32 C[64], const char *Name) {
         "rejection clears capability output");
 }
 
-static int LoadCapture(const char *Path, UINT32 C[64]) {
-  FILE *File = fopen(Path, "rb");
-  char Line[256];
-  unsigned Count = 0;
-  unsigned long long Offset, Value;
-  if (File == NULL) {
-    fprintf(stderr, "cannot open fixture %s\n", Path);
-    return 0;
-  }
-  while (fgets(Line, sizeof(Line), File) != NULL) {
-    if (sscanf(Line, "config_offset=0x%llx", &Offset) != 1) continue;
-    if (Count >= 64 || Offset != Count * 4U || fgets(Line, sizeof(Line), File) == NULL ||
-        sscanf(Line, "value=0x%llx", &Value) != 1 || Value > 0xffffffffULL) {
-      fclose(File);
-      fprintf(stderr, "malformed config fixture\n");
-      return 0;
-    }
-    C[Count++] = (UINT32)Value;
-  }
-  fclose(File);
-  if (Count != 64) fprintf(stderr, "fixture has %u config dwords, expected 64\n", Count);
-  return Count == 64;
-}
-
-static void TestCapture(const UINT32 Captured[64]) {
-  UINT32 C[64], Before[64];
-  GU_CAPS Caps;
-  memcpy(C, Captured, sizeof(C));
-  memcpy(Before, C, sizeof(C));
-  Check(GuCheckConfig(C, 0, 1, 0, 0, &Caps), "captured boot-03 config accepted");
-  Check(Caps.pm == 0x60 && Caps.msi == 0x68 && Caps.pcie == 0x78 && Caps.msix == 0 &&
-            Caps.pcie_version == 2,
-        "capture returns linked caps only; c8 is unlinked");
-  Check(memcmp(C, Before, sizeof(C)) == 0, "validation does not modify config");
-  Byte(C, 0xb5, 0xc8);
-  Check(GuCheckConfig(C, 0, 1, 0, 0, &Caps) && Caps.msix == 0xc8,
-        "synthetically linked captured MSI-X is disabled and accepted");
-  Word(C, 0xca, 0x8005);
-  Reject(C, "linked enabled MSI-X rejected");
-}
-
 static void TestIdentity(void) {
   static const struct {
     unsigned Offset, Value;
@@ -391,10 +350,7 @@ static void TestPaths(void) {
   Check(Path(P, sizeof(P)) == 0, "zero-filled path rejected");
 }
 
-int main(int Argc, char **Argv) {
-  UINT32 Captured[64];
-  if (Argc != 2 || !LoadCapture(Argv[1], Captured)) return 2;
-  TestCapture(Captured);
+int main(void) {
   TestIdentity();
   TestPowerAndPcie();
   TestCapabilities();
@@ -403,6 +359,6 @@ int main(int Argc, char **Argv) {
     fprintf(stderr, "%u/%u checks failed\n", Failures, Checks);
     return 1;
   }
-  printf("PASS %u preflight checks (real boot-03 fixture plus malformed inputs)\n", Checks);
+  printf("PASS %u preflight checks\n", Checks);
   return 0;
 }

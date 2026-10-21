@@ -238,7 +238,6 @@ typedef struct {
 } FILE_FAKE;
 static FILE_FAKE files[9]; /* root, parent, run, report, five assets */
 static GU_ASSET originals[5];
-static UINT32 captured_config[64];
 static UINTN exclusive_calls, close_protocol_calls, key_calls, watchdog_calls, report_bytes,
     file_closes;
 static UINTN query_calls;
@@ -715,7 +714,6 @@ static void app_setup(enum app_case mode) {
         : mode == APP_FWSEC_PIO_UNAVAILABLE        ? PIO_UNAVAILABLE
                                                    : SUCCESS);
   app_mode = mode;
-  memcpy(config, captured_config, sizeof(config));
   memset(&st, 0, sizeof(st));
   memset(&rt, 0, sizeof(rt));
   memset(files, 0, sizeof(files));
@@ -830,7 +828,7 @@ VOID GuLog(const char *f, ...) { (void)f; }
 VOID GuLogText(const char *s) { (void)s; }
 #endif
 int main(int argc, char **argv) {
-  CHECK(argc == 4 || argc == 5);
+  CHECK(argc == 3 || argc == 4);
   size_t n;
   UINT8 *data = read_file(argv[1], &n);
   CHECK(n == sizeof(prom));
@@ -846,21 +844,8 @@ int main(int argc, char **argv) {
     originals[i].name = full_names[i];
     originals[i].firmware.data = read_file(path, &originals[i].firmware.size);
   }
-  FILE *capture = fopen(argv[3], "r");
-  CHECK(capture);
-  char line[256];
-  unsigned count = 0;
-  unsigned long long offset, value;
-  while (fgets(line, sizeof(line), capture))
-    if (sscanf(line, "config_offset=0x%llx", &offset) == 1) {
-      CHECK(count < 64 && offset == count * 4 && fgets(line, sizeof(line), capture));
-      CHECK(sscanf(line, "value=0x%llx", &value) == 1);
-      captured_config[count++] = (UINT32)value;
-    }
-  fclose(capture);
-  CHECK(count == 64);
   for (int mode = 0; mode < APP_COUNT; mode++) {
-    if (argc == 5 && strcmp(argv[4], app_names[mode])) continue;
+    if (argc == 4 && strcmp(argv[3], app_names[mode])) continue;
     app_setup((enum app_case)mode);
     EFI_STATUS result = EFI_ABORTED;
     if (!setjmp(escape_halt)) result = efi_main(H(1), &st);
@@ -992,7 +977,7 @@ int main(int argc, char **argv) {
   }
   for (int i = 0; i < 5; i++)
     free((VOID *)originals[i].firmware.data);
-  if (argc == 5)
+  if (argc == 4)
     puts("Selected app regression passed.");
   else
     printf("%d app + real transaction scenarios passed; hardware behavior simulated.\n", APP_COUNT);
