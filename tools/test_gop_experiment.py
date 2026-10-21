@@ -168,8 +168,17 @@ class GopPackage(unittest.TestCase):
                              (second / 'EFI/BOOT/BOOTX64.EFI').read_bytes())
             self.assertNotEqual((first / 'RTX-UNLOCK/PROFILE.BIN').read_bytes(),
                                 (second / 'RTX-UNLOCK/PROFILE.BIN').read_bytes())
-            with self.assertRaisesRegex(ValueError, 'requires --profile'):
-                package(Path(directory) / 'missing')
+            manifest = json.loads((ROOT / 'build/gop-experiment/build-manifest.json').read_text(encoding='utf-8-sig'))
+            if manifest.get('AutoProfile'):
+                automatic = package(Path(directory) / 'missing')
+                self.assertFalse((automatic / 'RTX-UNLOCK/PROFILE.BIN').exists())
+                self.assertTrue((automatic / 'RTX-UNLOCK/DEBUG.ON').exists())
+                self.assertIn('PROBE00', (automatic / 'RTX-UNLOCK/README.txt').read_text())
+                self.assertTrue((automatic / 'SOURCE/probe_profile.c').is_file())
+                self.assertTrue((automatic / 'SOURCE/test_core.c').is_file())
+            else:
+                with self.assertRaisesRegex(ValueError, 'requires --profile'):
+                    package(Path(directory) / 'missing')
             second_profile.write_text('{}', encoding='utf-8')
             with self.assertRaises(ValueError):
                 package(Path(directory) / 'invalid', profile=second_profile)

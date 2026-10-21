@@ -14,7 +14,7 @@ $jobs=@(
  @{Name='probe-usb';Kind='python';Path='tools/test_probe_usb.py'},
  @{Name='profile-runtime';Kind='cmd';Path='unlock/test-profile.cmd'},
  @{Name='external-profile-format';Kind='python';Path='tools/test_runtime_profile.py'},
- @{Name='external-profile-runtime';Kind='cmd';Path='experiments/gop/test-external-profile.cmd'},
+ @{Name='auto-profile-runtime';Kind='cmd';Path='experiments/gop/test-auto-profile.cmd'},
  @{Name='gop-production';Kind='cmd';Path='experiments/gop/test-production.cmd'},
  @{Name='gop-ssd';Kind='cmd';Path='experiments/gop/test-ssd.cmd'},
  @{Name='port';Kind='cmd';Path='unlock/test-port.cmd'},

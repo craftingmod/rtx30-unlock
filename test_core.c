@@ -36,6 +36,8 @@ static BOOLEAN marker_is_file;
 static unsigned fs_opens, run_creates, file_creates, file_writes, file_flushes;
 static unsigned current_file, report_writes, prom_writes, rom_writes;
 static CHAR8 saved_report[32768];
+static UINT8 saved_data[PROBE_PROM_SIZE];
+static UINTN saved_size, saved_position;
 extern EFI_STATUS EFIAPI efi_main(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table);
 #define CHECK(c) do { if (!(c)) { printf("FAIL line %d: %s\n", __LINE__, #c); failures++; } } while (0)
 
@@ -153,6 +155,7 @@ static EFI_STATUS EFIAPI open_file(EFI_FILE_PROTOCOL *dir, EFI_FILE_PROTOCOL **o
 }
 static EFI_STATUS EFIAPI write_file(EFI_FILE_PROTOCOL *file, UINTN *size, VOID *data) {
   CHECK(file == &saved_file && data != NULL && *size > 0);
+  saved_size=*size; saved_position=0; memcpy(saved_data,data,*size);
   file_writes++;
   if (fail_log) return EFI_VOLUME_FULL;
   if (current_file == 1) {
@@ -161,6 +164,14 @@ static EFI_STATUS EFIAPI write_file(EFI_FILE_PROTOCOL *file, UINTN *size, VOID *
   } else if (current_file == 2) { CHECK(*size == PROBE_PROM_SIZE); prom_writes++; }
   else if (current_file == 3) rom_writes++;
   return EFI_SUCCESS;
+}
+static EFI_STATUS EFIAPI seek_file(EFI_FILE_PROTOCOL *file, UINT64 position) {
+  CHECK(file==&saved_file && position<=saved_size); saved_position=(UINTN)position; return EFI_SUCCESS;
+}
+static EFI_STATUS EFIAPI read_file(EFI_FILE_PROTOCOL *file, UINTN *size, VOID *data) {
+  CHECK(file==&saved_file);
+  if(*size>saved_size-saved_position)*size=saved_size-saved_position;
+  memcpy(data,saved_data+saved_position,*size);saved_position+=*size;return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI flush_file(EFI_FILE_PROTOCOL *file) {
   CHECK(file == &saved_file); file_flushes++; return EFI_SUCCESS;
@@ -224,6 +235,7 @@ static void reset(void) {
   root_dir.Open = open_file; root_dir.Close = close_file;
   marker_dir = run_dir = saved_file = root_dir;
   marker_dir.GetInfo = get_file_info;
+  saved_file.Read=read_file; saved_file.SetPosition=seek_file;
   saved_file.Write = write_file; saved_file.Flush = flush_file;
   device_path[0] = MESSAGING_DEVICE_PATH; device_path[1] = MSG_USB_DP;
   device_path[2] = 6; device_path[3] = 0; device_path[4] = device_path[5] = 0;

@@ -59,15 +59,20 @@ def package(output, root=ROOT, assets=None, profile=None):
         if not manifest.get('Production') or not manifest.get('WindowsHandoff') or mode != 'full-unlock':
             raise ValueError('SSD experiment requires production Windows handoff')
         required.update({'unlock/boot_source.h', 'experiments/gop/test-ssd.cmd', 'experiments/gop/test_ssd_flow.c'})
+    if manifest.get('AutoProfile'):
+        if not manifest.get('ExternalProfile'):
+            raise ValueError('Auto profile requires external-profile mode')
+        required.update({'probe_app.c', 'probe_core.c', 'probe_core.h', 'probe_profile.c', 'probe_profile.h', 'unlock/profile_probe.c'})
     profile_data = None
     if manifest.get('ExternalProfile'):
         if not manifest.get('SsdExperiment'):
             raise ValueError('External profile requires the SSD experiment flow')
-        if profile is None:
+        if profile is None and not manifest.get('AutoProfile'):
             raise ValueError('External-profile package requires --profile board.json')
         from runtime_profile import encode
         from check_profile import check
-        profile_data = encode(check(profile, experimental=True))
+        if profile is not None:
+            profile_data = encode(check(profile, experimental=True))
     elif profile is not None:
         raise ValueError('--profile requires an external-profile EFI')
     if not required.issubset({entry['Path'] for entry in sources}):
@@ -97,6 +102,15 @@ def package(output, root=ROOT, assets=None, profile=None):
                 instructions.write('v18: PROFILE.BIN is mandatory on this EFI volume. Missing/invalid profiles stop before GPU detach.\n'
                                    'Replace PROFILE.BIN with tools/runtime_profile.py output for another captured environment.\n'
                                    'DEBUG.ON is included for the first test; U is required even on the already-applied skip path.\n')
+        if manifest.get('AutoProfile'):
+            (marker / 'DEBUG.ON').touch()
+            with (marker / 'README.txt').open('a', encoding='utf-8') as instructions:
+                instructions.write('v20: without DEBUG.ON, Probe stays in memory and only PROFILE.BIN is saved.\n'
+                                   'First generation and an unchanged PROM proceed automatically; no PROBE or RUN folders are created.\n'
+                                   'A changed PROM on the same device stages a validated replacement; U is required before saving and applying it.\n'
+                                   'Esc or timeout preserves the old profile and stops boot. Corrupt profiles and read errors stop.\n'
+                                   'DEBUG.ON is included: keep it for PROBE00..PROBE99 evidence, detailed logs and manual U.\n'
+                                   'Hardware untested. Remove DEBUG.ON to use the minimal-storage mode.\n')
         shutil.copyfile(build / 'BOOTX64.EFI', boot / 'BOOTX64.EFI')
         if mode == 'full-unlock':
             asset_target = stage / 'RTX-UNLOCK/ASSETS'

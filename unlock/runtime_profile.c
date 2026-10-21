@@ -30,7 +30,7 @@ BOOLEAN GuProfileDecode(const UINT8 *data, UINTN size, GU_RUNTIME_PROFILE *out) 
   }
   *out=p;return TRUE;
 }
-EFI_STATUS GuProfileLoad(EFI_FILE_PROTOCOL *directory) {
+EFI_STATUS GuProfileRead(EFI_FILE_PROTOCOL *directory, UINT8 *copy) {
   EFI_FILE_PROTOCOL *file=NULL;EFI_GUID infoGuid=EFI_FILE_INFO_ID;
   union {EFI_FILE_INFO info;UINT8 bytes[512];} metadata;
   UINT8 data[GU_RUNTIME_PROFILE_BYTES],extra;GU_RUNTIME_PROFILE parsed={0};
@@ -58,6 +58,12 @@ EFI_STATUS GuProfileLoad(EFI_FILE_PROTOCOL *directory) {
   }
   EFI_STATUS closed=file->Close(file);if(!EFI_ERROR(status))status=closed;
   /* Publish once, only after both the complete read and Close succeeded. */
-  if(!EFI_ERROR(status))GuProfile=parsed;
-  return status;
+  if(!EFI_ERROR(status)){
+    GuProfile=parsed;
+    if(copy)for(UINTN i=0;i<sizeof(data);i++)copy[i]=data[i];
+  }
+  /* Only Open's EFI_NOT_FOUND means absent; a disappearing/broken file is invalid. */
+  return status==EFI_NOT_FOUND?EFI_DEVICE_ERROR:status;
 }
+
+EFI_STATUS GuProfileLoad(EFI_FILE_PROTOCOL *directory) { return GuProfileRead(directory,NULL); }

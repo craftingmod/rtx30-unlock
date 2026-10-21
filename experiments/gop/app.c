@@ -10,8 +10,14 @@
 #ifdef GC_PRODUCTION
 #ifdef GU_RUNTIME_PROFILE_BUILD
 #include "../../unlock/runtime_profile.h"
+#ifdef GU_AUTO_PROFILE
+#include "../../probe_profile.h"
+#define GC_DIAG "v20-quiet-profile"
+#define GC_DIAG_WIDE L"v20-quiet-profile"
+#else
 #define GC_DIAG "v18-unified-layout"
 #define GC_DIAG_WIDE L"v18-unified-layout"
+#endif
 #elif defined(GU_SSD_EXPERIMENT)
 #define GC_DIAG "v16-ssd-selectors"
 #define GC_DIAG_WIDE L"v16-ssd-selectors"
@@ -54,6 +60,9 @@ static EFI_SYSTEM_TABLE *Table;
 static EFI_FILE_PROTOCOL *Report;
 static UINTN RunSlot;
 static BOOLEAN LogFailed,Quiet;
+#ifdef GU_AUTO_PROFILE
+static BOOLEAN ProfileChanged;
+#endif
 static CHAR16 *volatile Banner=L"\r\nNVIDIA GOP experiment / diagnostic " GC_DIAG_WIDE L"\r\n";
 static EFI_GUID PciGuid=EFI_PCI_IO_PROTOCOL_GUID,
   LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID,FsGuid=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID,
@@ -85,6 +94,9 @@ static VOID ShowFailure(const char *stage,EFI_STATUS status) {
     L"For log failure, copy the entire package including RTX-UNLOCK.\r\n"
 #ifdef GU_RUNTIME_PROFILE_BUILD
     L"PROFILE.BIN must be valid in RTX-UNLOCK on this EFI volume.\r\n"
+#ifdef GU_AUTO_PROFILE
+    L"Auto-Probe evidence: RTX-UNLOCK/PROBEnn. Corrupt profiles stop; PROM changes require U to replace the profile.\r\n"
+#endif
 #endif
 #ifdef GC_PRODUCTION
     L"Automatic boot stopped. Power off physically.\r\n");
@@ -100,10 +112,9 @@ static EFI_STATUS CloseFile(EFI_FILE_PROTOCOL *file,EFI_STATUS status) {
   if(file && EFI_ERROR(file->Close(file)))return EFI_DEVICE_ERROR;
   return status;
 }
-static EFI_STATUS OpenLog(EFI_HANDLE image) {
-  RunSlot=100;
+static EFI_STATUS OpenParent(EFI_HANDLE image, EFI_FILE_PROTOCOL **out) {
   EFI_BOOT_SERVICES *bs=Table->BootServices;EFI_LOADED_IMAGE_PROTOCOL *loaded=NULL;
-  EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs=NULL;EFI_FILE_PROTOCOL *root=NULL,*parent=NULL,*run=NULL;
+  EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs=NULL;EFI_FILE_PROTOCOL *root=NULL,*parent=NULL;
   EFI_STATUS status=bs->HandleProtocol(image,&LoadedGuid,(VOID **)&loaded);
   if(EFI_ERROR(status) || !loaded || !Usb(loaded->DeviceHandle))return EFI_UNSUPPORTED;
   status=bs->HandleProtocol(loaded->DeviceHandle,&FsGuid,(VOID **)&fs);
@@ -115,18 +126,31 @@ static EFI_STATUS OpenLog(EFI_HANDLE image) {
   union {EFI_FILE_INFO info;UINT8 bytes[512];} metadata;UINTN size=sizeof(metadata);
   status=parent->GetInfo(parent,&InfoGuid,&size,&metadata);
   if(EFI_ERROR(status) || size<SIZE_OF_EFI_FILE_INFO || !(metadata.info.Attribute&EFI_FILE_DIRECTORY))return CloseFile(parent,EFI_UNSUPPORTED);
-#ifdef GU_RUNTIME_PROFILE_BUILD
-  status=GuProfileLoad(parent);
-  if(EFI_ERROR(status))return CloseFile(parent,status);
-#endif
+  *out=parent;return EFI_SUCCESS;
+}
+static EFI_STATUS OpenLog(EFI_HANDLE image) {
+  RunSlot=100;
+  EFI_FILE_PROTOCOL *parent=NULL,*run=NULL;
+  EFI_STATUS status=OpenParent(image,&parent);
+  if(EFI_ERROR(status))return status;
 #ifdef GC_PRODUCTION
   EFI_FILE_PROTOCOL *debug=NULL;
   status=parent->Open(parent,&debug,L"DEBUG.ON",EFI_FILE_MODE_READ,0);
-  if(status==EFI_NOT_FOUND){Quiet=TRUE;return CloseFile(parent,EFI_SUCCESS);}
-  if(status!=EFI_SUCCESS || !debug)return CloseFile(parent,EFI_ERROR(status)?status:EFI_DEVICE_ERROR);
-  status=CloseFile(debug,EFI_SUCCESS);
+  if(status==EFI_NOT_FOUND)Quiet=TRUE;
+  else {
+    if(status!=EFI_SUCCESS || !debug)return CloseFile(parent,EFI_ERROR(status)?status:EFI_DEVICE_ERROR);
+    status=CloseFile(debug,EFI_SUCCESS);
+    if(EFI_ERROR(status))return CloseFile(parent,status);
+  }
+#endif
+#ifdef GU_RUNTIME_PROFILE_BUILD
+  status=GuProfileLoad(parent);
+#ifdef GU_AUTO_PROFILE
+  if(status==EFI_NOT_FOUND)status=GuProfileCreate(Table,parent,!Quiet);
+#endif
   if(EFI_ERROR(status))return CloseFile(parent,status);
 #endif
+  if(Quiet)return CloseFile(parent,EFI_SUCCESS);
   status=EFI_VOLUME_FULL;
   for(UINTN slot=0;slot<100;slot++) {
     CHAR16 name[]=L"RUN00";name[3]=(CHAR16)('0'+slot/10);name[4]=(CHAR16)('0'+slot%10);
@@ -173,7 +197,18 @@ static EFI_STATUS Target(GC_CONTEXT *c) {
 #ifndef GC_TREE_ONLY
 static EFI_STATUS Approve(VOID) {
 #ifdef GC_PRODUCTION
-  if(Quiet)return Say(L"Automatic unlock and Windows boot. Please wait.\r\n");
+  if(Quiet
+#ifdef GU_AUTO_PROFILE
+     && !ProfileChanged
+#endif
+    )return Say(L"Automatic unlock and Windows boot. Please wait.\r\n");
+#endif
+#ifdef GU_AUTO_PROFILE
+  if(ProfileChanged) {
+    EFI_STATUS notice=Say(L"PROM changed: the stored profile no longer matches.\r\n"
+      L"A newly captured profile passed validation. U accepts the replacement and application.\r\n");
+    if(EFI_ERROR(notice))return notice;
+  }
 #endif
   if(!Table->ConIn || !Table->ConIn->ReadKeyStroke)return EFI_UNSUPPORTED;
   EFI_STATUS status=Table->ConIn->Reset(Table->ConIn,FALSE);if(EFI_ERROR(status))return status;
@@ -233,6 +268,9 @@ static VOID Halt(VOID) {
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   if(!table || !table->BootServices || !table->RuntimeServices)return EFI_INVALID_PARAMETER;
   Table=table;Report=NULL;LogFailed=FALSE;Quiet=FALSE;
+#ifdef GU_AUTO_PROFILE
+  ProfileChanged=FALSE;
+#endif
   GC_CONTEXT context={0};context.table=table;context.image=image;context.log=Log;
 #ifdef GC_WINDOWS_HANDOFF
   GW_PLAN windows={0};
@@ -304,6 +342,18 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   status=table->BootServices->SetWatchdogTimer(0,0,0,NULL);if(EFI_ERROR(status))goto finish;
   stage="target";
   status=Target(&context);if(EFI_ERROR(status))goto finish;
+#ifdef GU_AUTO_PROFILE
+  stage="profile-prom-check";
+  status=GuProfilePromChanged(table,context.pci,&ProfileChanged);
+  if(EFI_ERROR(status))goto finish;
+  if(ProfileChanged) {
+    EFI_FILE_PROTOCOL *parent=NULL;
+    stage="profile-refresh";status=OpenParent(image,&parent);
+    if(!EFI_ERROR(status))status=GuProfileRefresh(table,parent,!Quiet);
+    status=CloseFile(parent,status);if(EFI_ERROR(status))goto finish;
+    if(!Log("PROFILE_PROM_CHANGED: validated candidate staged; disk profile unchanged until U\n")){status=EFI_DEVICE_ERROR;goto finish;}
+  }
+#endif
 #ifdef GC_TREE_ONLY
   stage="ownership-tree";
   Say(L"Read-only ownership tree capture. No U key or driver detach is used.\r\n");
@@ -339,9 +389,20 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   stage="windows-preflight";status=GwPrepare(&context,&windows);if(status!=EFI_SUCCESS)goto finish;
 #endif
   stage="start-gate";status=Approve();if(EFI_ERROR(status))goto finish;
+#ifdef GU_AUTO_PROFILE
+  if(ProfileChanged) {
+    EFI_FILE_PROTOCOL *parent=NULL;
+    stage="profile-commit";status=OpenParent(image,&parent);
+    if(!EFI_ERROR(status))status=GuProfileCommit(parent);
+    status=CloseFile(parent,status);if(EFI_ERROR(status))goto finish;
+  }
+#endif
   BOOLEAN manual=TRUE;
 #ifdef GC_PRODUCTION
   manual=!Quiet;
+#ifdef GU_AUTO_PROFILE
+  manual=manual || ProfileChanged;
+#endif
 #endif
   if(!Log(manual?"MANUAL_U confirmed; proceeding with one planned operation\n":
       "AUTO_START: all preflight checks passed; proceeding once\n")){status=EFI_DEVICE_ERROR;goto finish;}

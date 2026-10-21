@@ -1,5 +1,37 @@
 # v18 외부 프로필 및 통합 폴더
 
+## v20 DEBUG OFF 최소 저장 (실기 미검증)
+
+`-AutoProfile` 공통 EFI는 PROFILE.BIN이 없으면 내부 Probe로 생성한다. DEBUG ON은 기존 상세 수집과 U 승인을 유지한다. DEBUG OFF는 수집·검증을 메모리에서 수행하고 **RTX-UNLOCK/PROFILE.BIN(176바이트)만 저장**한다. DEBUG.ON을 자동 생성하지 않으며, PROBEnn·RUNnn·REPORT·INVENTORY·PROM·ROMIMAGE 파일을 새로 만들지 않는다. 과거 캡처와 로그를 자동 삭제하지 않는다.
+
+| 상태 | DEBUG ON | DEBUG OFF |
+| --- | --- | --- |
+| PROFILE.BIN 없음 | PROBEnn 캡처와 프로필 생성, U 승인 | 프로필만 생성, 승인 없이 진행 |
+| 프로필 유효·PROM 동일 | 기존처럼 상세 로그·U 승인 | 파일 추가 생성 없이 자동 진행 |
+| 같은 장치에서 PROM 해시 변경 | PROBEnn 재수집, U 승인 후 교체 | 메모리 재수집, U 승인 후 프로필만 교체 |
+| 손상·잘림·잘못된 프로필 / 다른 장치 / 읽기 실패 | 중단 | 중단 |
+
+PROM 변경은 실제 GPU를 읽어 판정한다. 디스크의 PROM.BIN은 사용하지 않는다. 장치 PCI/Subsystem·칩·class/revision·BAR 크기가 기존 프로필과 같아야 변경 경로를 허용한다. 새 캡처는 단일 장치, 칩·PROM 서명, BAR/FB, GFW cold 상태, MMU/WPR2 검사를 통과해야 하며, 기존 적용 전 장치·자산·화면·Windows 검사도 유지한다.
+
+변경된 프로필은 메모리에만 준비하고 사전 검사 후 U를 요구한다. U를 누른 뒤 기존 PROFILE.BIN이 그대로인지 확인하고 교체·Flush·재읽기·Close·로더 검증이 성공해야 적용한다. Esc·30초 시간 초과·입력 오류·사전 검사 실패는 프로필 교체와 적용·Windows 연결 부팅을 중단한다. 승인 후 고정 크기 파일을 제자리에서 갱신하므로 저장 도중 전원이 끊기면 파일이 손상될 수 있으며, 다음 실행은 이를 거부한다. 손상 프로필 복구 시에는 전원을 끄고 원본을 다른 곳에 보관한 뒤 새로 생성한다.
+
+```powershell
+./scripts/build-gop-experiment.ps1 -FullUnlock -WindowsHandoff -Production -SsdExperiment -ExternalProfile -AutoProfile
+python tools/package_gop_experiment.py --output build/gop-experiment-v20-quiet-profile --zip build/gop-experiment-v20-quiet-profile.zip --assets assets
+```
+
+패키지에는 초기 실험용 DEBUG.ON을 포함한다. OFF를 사용하려면 실행 볼륨 RTX-UNLOCK의 DEBUG.ON을 제거한다. 새 패키지 내용물을 FAT32 USB 또는 허용된 GPT EFI System Partition에 복사한다. 위 명령은 실제 디스크·NVRAM을 변경하지 않는다.
+
+DEBUG ON 수집은 비어 있는 PROBE00–PROBE99를 선택해 INVENTORY.TXT, REPORT.TXT, PROM.BIN, 사용 가능한 ROMIMAGE.BIN을 저장·재검증한다. 슬롯이 모두 사용 중이면 중단한다. DEBUG OFF는 슬롯 사용량과 무관하며, REPORT 해시는 메모리에서 작성한 보고서에 대응한다. 저장된 원본이 없어 Python으로 동일 캡처를 재검증·재생성할 수 없다.
+
+```powershell
+cmd /c experiments\gop\test-auto-profile.cmd
+```
+
+호스트 테스트는 C/Python 바이너리 일치, DEBUG OFF 무캡처 저장, 실제 PROM 비교, 승인 전 프로필 보존, 승인 후 교체·재검증, U/Esc/시간 초과·읽기·저장 오류를 검사한다. 자동 생성은 펌웨어 호환성·GPU 안정성 인증이 아니며 실제 GPU 쓰기·Windows 연결 부팅은 실기 확인이 필요하다.
+
+## v18 기존 경로
+
 v18-unified-layout은 공통 EFI 하나와 `RTX-UNLOCK/PROFILE.BIN`을 사용한다. EFI는 JSON을 파싱하지 않는다. PC의 기존 Probe 검증 도구가 원본 REPORT/PROM과 JSON의 일치를 검사한 뒤 176바이트 고정 형식으로 변환한다. v17과 프로필 바이너리 형식은 같다. v18은 새 경로만 읽으므로 새 EFI와 RTX-UNLOCK 폴더를 함께 배치해야 한다.
 
 이 기능은 GA102·GA103·GA104·GA106·GA107의 **실험용 프로필 로딩**이다. 다른 카드의 펌웨어 실행·FLR·영상 복구·Windows/CUDA 성공을 인증하지 않는다. GA100·Turing·Ada는 거부한다. 칩별로 다른 실행 절차가 필요하면 공통 EFI도 수정해야 한다.

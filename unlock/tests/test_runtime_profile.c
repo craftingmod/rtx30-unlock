@@ -29,7 +29,7 @@ static EFI_STATUS EFIAPI ReadProfile(EFI_FILE_PROTOCOL *f,UINTN *size,VOID *out)
   if(*size>end-Position)*size=end-Position;
   if(Mode==6 && *size)(*size)--;
   memcpy(out,Bytes+Position,*size);Position+=*size;
-  return Mode==9?EFI_DEVICE_ERROR:EFI_SUCCESS;
+  return Mode==10?EFI_NOT_FOUND:Mode==9?EFI_DEVICE_ERROR:EFI_SUCCESS;
 }
 static void Put32(UINTN offset,UINT32 value){for(unsigned i=0;i<4;i++)Bytes[offset+i]=(UINT8)(value>>(i*8));}
 static void Rehash(void){GuSha256(Bytes,144,Bytes+144);}
@@ -55,9 +55,10 @@ int main(int argc,char **argv){
     Mode=Closes=0;assert(GuProfileLoad(&Directory)==EFI_SUCCESS && Closes==1);
     assert(GuProfile.identity==parsed.identity);
     same_bdf=read_error=wrong_class=0;assert(ProfileChecks()==0);
-    for(Mode=1;Mode<=9;Mode++){
+    for(Mode=1;Mode<=10;Mode++){
       Closes=0;assert(EFI_ERROR(GuProfileLoad(&Directory)) && !GuProfile.identity);
       assert(Closes==(Mode==1?0U:1U));
+      if(Mode==10)assert(GuProfileLoad(&Directory)!=EFI_NOT_FOUND);
     }
     Mode=0;Bytes[80]^=1;assert(GuProfileLoad(&Directory)==EFI_COMPROMISED_DATA && !GuProfile.identity);
   }

@@ -13,6 +13,7 @@ typedef struct {
 } GU_RUNTIME_PROFILE;
 extern GU_RUNTIME_PROFILE GuProfile;
 BOOLEAN GuProfileDecode(const UINT8 *data, UINTN size, GU_RUNTIME_PROFILE *out);
+EFI_STATUS GuProfileRead(EFI_FILE_PROTOCOL *directory, UINT8 *copy);
 EFI_STATUS GuProfileLoad(EFI_FILE_PROTOCOL *directory);
 
 #ifdef GU_RUNTIME_PROFILE_BUILD

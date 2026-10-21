@@ -1,5 +1,6 @@
-param([switch]$TreeOnly,[switch]$LeafOnly,[switch]$FullFlr,[switch]$FullUnlock,[switch]$WindowsHandoff,[switch]$Production,[switch]$SsdExperiment,[switch]$ExternalProfile,[string]$Profile='')
+param([switch]$TreeOnly,[switch]$LeafOnly,[switch]$FullFlr,[switch]$FullUnlock,[switch]$WindowsHandoff,[switch]$Production,[switch]$SsdExperiment,[switch]$ExternalProfile,[switch]$AutoProfile,[string]$Profile='')
 $ErrorActionPreference = 'Stop'
+if ($AutoProfile -and -not $ExternalProfile) { throw '-AutoProfile requires -ExternalProfile.' }
 if ($ExternalProfile -and (-not $SsdExperiment -or -not $Production -or -not $WindowsHandoff -or -not $FullUnlock)) { throw '-ExternalProfile requires -FullUnlock -WindowsHandoff -Production -SsdExperiment.' }
 if ($SsdExperiment -and (-not $Production -or -not $WindowsHandoff -or -not $FullUnlock)) { throw '-SsdExperiment requires -FullUnlock -WindowsHandoff -Production.' }
 if ($Production -and (-not $FullUnlock -or -not $WindowsHandoff)) { throw '-Production requires -FullUnlock -WindowsHandoff.' }
@@ -36,6 +37,7 @@ try {
             $modeFlags += '-DGU_RUNTIME_PROFILE_BUILD'
         } else { $modeFlags += @('-include','build/gop-experiment/profile.h') }
     }
+    if ($AutoProfile) { $sources += @('probe_app','probe_core','probe_profile','unlock/profile_probe'); $modeFlags += '-DGU_AUTO_PROFILE' }
     if ($WindowsHandoff) { $sources += 'experiments/gop/windows'; $modeFlags += '-DGC_WINDOWS_HANDOFF' }
     if ($Production) { $modeFlags += '-DGC_PRODUCTION' }
     if ($SsdExperiment) { $modeFlags += '-DGU_SSD_EXPERIMENT' }
@@ -81,13 +83,14 @@ try {
     if ($Production) { $records += @('experiments/gop/test-production.cmd','experiments/gop/test_quiet_io.c') }
     if ($SsdExperiment) { $records += @('experiments/gop/test-ssd.cmd','experiments/gop/test_ssd_flow.c') }
     if ($ExternalProfile) { $records += @('tools/runtime_profile.py','tools/test_runtime_profile.py','tools/test_probe_profile.py','unlock/tests/test_runtime_profile.c','experiments/gop/test-external-profile.cmd','experiments/gop/test_external_flow.c','docs/EXTERNAL-PROFILE.md') }
+    if ($AutoProfile) { $records += @('probe_core.h','probe_profile.h','test_core.c','test.cmd','experiments/gop/test-auto-profile.cmd','experiments/gop/test_auto_profile.c','experiments/gop/test_auto_capture.c','experiments/gop/test_auto_flow.c') }
     $records = @($records | Sort-Object -Unique)
     [ordered]@{
         BuiltUtc=[DateTime]::UtcNow.ToString('o'); HardwareTested=$false; WindowsHandoff=[bool]$WindowsHandoff; Production=[bool]$Production; SsdExperiment=[bool]$SsdExperiment
-        ExternalProfile=[bool]$ExternalProfile
+        ExternalProfile=[bool]$ExternalProfile; AutoProfile=[bool]$AutoProfile
         Mode=$(if ($FullUnlock) {'full-unlock'} elseif ($FullFlr) {'full-flr'} elseif ($LeafOnly) {'leaf-member'} elseif ($TreeOnly) {'tree-read-only'} else {'cycle'})
         EfiSha256=(Get-BuildHash 'build/gop-experiment/BOOTX64.EFI')
         Sources=@($records | ForEach-Object { [ordered]@{Path=$_; Sha256=(Get-BuildHash $_)} })
     } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 build/gop-experiment/build-manifest.json
-    Write-Output $(if ($ExternalProfile) {'Built v18-unified-layout: RTX-UNLOCK/PROFILE.BIN required; paired RUNnn logs; DEBUG.ON enables logs and manual U; hardware untested.'} elseif ($SsdExperiment) {'Built v16-ssd-selectors: USB/GPT ESP source, SS0 skip and relaxed initial selectors; hardware untested.'} elseif ($Production) {'Built v15-auto-windows: verified unlock; DEBUG.ON enables logs and manual U; hardware untested.'} elseif ($WindowsHandoff) {'Built v14-windows-handoff: v13 recovery then verified Windows chainload; hardware untested.'} elseif ($FullUnlock) {'Built v13-mode-cycle-readback: alternate/original mode cycle and direct framebuffer verification; hardware untested.'} elseif ($FullFlr) {'Built v8-virtual-gop: full GOP release, one FLR and display restoration; no compute unlock.'} elseif ($LeafOnly) {'Built v5-leaf single text-member Stop/Supported/Start experiment; GPU GOP/EDID untouched by app.'} elseif ($TreeOnly) {'Built v4-tree read-only ownership capture; no detach/reconnect or unlock/FLR core linked.'} else {'Built GOP round-trip experiment. Only driver-model detach/reconnect; no unlock/FLR core linked.'})
+    Write-Output $(if ($AutoProfile) {'Built v20-quiet-profile: quiet generation saves PROFILE.BIN only; PROM changes require U; hardware untested.'} elseif ($ExternalProfile) {'Built v18-unified-layout: RTX-UNLOCK/PROFILE.BIN required; paired RUNnn logs; DEBUG.ON enables logs and manual U; hardware untested.'} elseif ($SsdExperiment) {'Built v16-ssd-selectors: USB/GPT ESP source, SS0 skip and relaxed initial selectors; hardware untested.'} elseif ($Production) {'Built v15-auto-windows: verified unlock; DEBUG.ON enables logs and manual U; hardware untested.'} elseif ($WindowsHandoff) {'Built v14-windows-handoff: v13 recovery then verified Windows chainload; hardware untested.'} elseif ($FullUnlock) {'Built v13-mode-cycle-readback: alternate/original mode cycle and direct framebuffer verification; hardware untested.'} elseif ($FullFlr) {'Built v8-virtual-gop: full GOP release, one FLR and display restoration; no compute unlock.'} elseif ($LeafOnly) {'Built v5-leaf single text-member Stop/Supported/Start experiment; GPU GOP/EDID untouched by app.'} elseif ($TreeOnly) {'Built v4-tree read-only ownership capture; no detach/reconnect or unlock/FLR core linked.'} else {'Built GOP round-trip experiment. Only driver-model detach/reconnect; no unlock/FLR core linked.'})
 } finally { Pop-Location }

@@ -1,5 +1,7 @@
 # RTX 3080 Unlock
 
+새 **v20-quiet-profile** 실험은 DEBUG OFF에서 EFI 내부 Probe 결과를 메모리에서 검증하고 PROFILE.BIN만 저장한다. 최초 생성과 PROM 일치 시에는 자동 진행하고, 같은 장치의 PROM 해시가 바뀌면 새 프로필로 사전 검사 후 U 승인을 받아 교체한다. DEBUG ON의 상세 수집·U 승인은 유지한다. [사용법](docs/EXTERNAL-PROFILE.md#v20-debug-off-최소-저장-실기-미검증). 실기 미검증.
+
 현재 실험용 **v18-unified-layout**은 같은 실행 볼륨의 `RTX-UNLOCK` 아래에 `ASSETS/`, `PROFILE.BIN`, `DEBUG.ON`을 모은다. 상세 로그는 같은 `RUNnn`에 `GOP.TXT`와 `UNLOCK.TXT`로 저장한다. `DEBUG.ON`이 있으면 상세 로그와 **U 키 승인**, 없으면 RUN을 만들지 않고 자동 진행한다. v17 외부 프로필 적용 경로는 현재 환경에서 실기 성공했으며 v18의 새 경로는 실기 미검증이다. 기존 장치·PROM·메모리 배치 및 transaction 검사는 유지한다. [현재 사용법](docs/EXTERNAL-PROFILE.md)을 참고한다.
 
 현재 `v16-ssd-selectors`는 USB/GPT SSD EFI 실행, 초기 SS0=88888888일 때 스킵, 다른 초기 셀렉터 값에서 적용 시도를 지원하는 별도 실험 빌드다. 자동 실행·기본 무로그·`DEBUG.ON` 상세 로그를 유지한다. 사용자 실기에서 예상 외 초기 SS0=24700051의 적용·영상 복구·Windows 부팅이 성공했고, 상세 로그를 켠 사전 검사~보고 완료는 약 9초였다. 이미 적용된 SS0의 스킵 경로와 무로그 실행은 아직 실기 미검증이다.
