@@ -1,10 +1,10 @@
 #define main ProbeFixtureMain
-#include "../../test_core.c"
+#include "../probe/test_core.c"
 #undef main
 #include <assert.h>
-#include "../../probe_profile.h"
-#include "../../unlock/sha256.h"
-#include "../../unlock/runtime_profile.h"
+#include "../probe/probe_profile.h"
+#include "../unlock/sha256.h"
+#include "../unlock/runtime_profile.h"
 static unsigned Fault;
 static EFI_STATUS EFIAPI ColdRead(EFI_PCI_IO_PROTOCOL *p, EFI_PCI_IO_PROTOCOL_WIDTH w, UINT8 bar,
                                   UINT64 offset, UINTN count, VOID *out) {

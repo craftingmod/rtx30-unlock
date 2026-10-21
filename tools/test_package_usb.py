@@ -30,7 +30,7 @@ class UsbPackageTests(unittest.TestCase):
         (self.root / 'LICENSE').write_text('GPL test notice\n')
         (self.root / 'LICENSES/EDK2.txt').write_text('EDK2 test notice\n')
         (self.root / 'docs/USB-BOOT.md').write_text('Test USB instructions\n')
-        (self.root / 'unlock/app.c').write_bytes(b'/* source fixture */\n')
+        (self.root / 'src/unlock/app.c').write_bytes(b'/* source fixture */\n')
         (self.root / 'unlock/verify_pe.py').write_bytes((PROJECT / 'unlock/verify_pe.py').read_bytes())
         # Minimal PE accepted by the real verifier, with an executable EFI entry.
         data = bytearray(1024)
@@ -53,7 +53,7 @@ class UsbPackageTests(unittest.TestCase):
         (self.efi.parent / 'BOOTX64.map').write_text(' 0001:00000000 efi_main 0000000000001000\n')
         (self.efi.parent / 'build-manifest.json').write_text(json.dumps({
             'EfiSha256': hashlib.sha256(data).hexdigest(),
-            'Sources': [{'Path': 'app.c', 'Sha256': hashlib.sha256((self.root / 'unlock/app.c').read_bytes()).hexdigest()}],
+            'Sources': [{'Path': 'src/unlock/app.c', 'Sha256': hashlib.sha256((self.root / 'src/unlock/app.c').read_bytes()).hexdigest()}],
         }))
         specs = []
         for n in range(5):
@@ -89,7 +89,7 @@ class UsbPackageTests(unittest.TestCase):
         self.assertTrue((self.output / 'RTX-UNLOCK/LICENSES/GPL-2.0.txt').is_file())
         self.assertTrue((self.output / 'RTX-UNLOCK/LICENSES/EDK2.txt').is_file())
         with zipfile.ZipFile(self.output / 'RTX-UNLOCK/SOURCE.zip') as archive:
-            self.assertEqual(archive.read('unlock/app.c'), b'/* source fixture */\n')
+            self.assertEqual(archive.read('src/unlock/app.c'), b'/* source fixture */\n')
             self.assertNotIn('.env', archive.namelist())
             self.assertNotIn('unlock/build/BOOTX64.EFI', archive.namelist())
         hashes = (self.output / 'SHA256SUMS.txt').read_text()
@@ -119,7 +119,7 @@ class UsbPackageTests(unittest.TestCase):
         self.assertFalse(self.output.exists())
 
     def test_changed_source_is_rejected_before_output_creation(self):
-        (self.root / 'unlock/app.c').write_text('/* unverified edit */\n')
+        (self.root / 'src/unlock/app.c').write_text('/* unverified edit */\n')
         result = self.run_package()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('source', result.stderr.lower())
@@ -169,7 +169,7 @@ class UsbPackageTests(unittest.TestCase):
         def concurrent_edit(source, destination):
             result = copyfile(source, destination)
             if Path(source).resolve() == self.efi.resolve():
-                (self.root / 'unlock/app.c').write_text('/* concurrent edit */\n')
+                (self.root / 'src/unlock/app.c').write_text('/* concurrent edit */\n')
             return result
 
         with mock.patch.object(package.shutil, 'copyfile', side_effect=concurrent_edit):

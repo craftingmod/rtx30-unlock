@@ -1,5 +1,5 @@
 #include "cycle.h"
-#include "../../unlock/boot_source.h"
+#include "../unlock/boot_source.h"
 #if defined(GC_FULL_FLR)
 #include "full.h"
 #ifdef GC_FULL_UNLOCK
@@ -9,9 +9,9 @@
 #include "windows.h"
 #ifdef GC_PRODUCTION
 #ifdef GU_RUNTIME_PROFILE_BUILD
-#include "../../unlock/runtime_profile.h"
+#include "../unlock/runtime_profile.h"
 #ifdef GU_AUTO_PROFILE
-#include "../../probe_profile.h"
+#include "../probe/probe_profile.h"
 #define GC_DIAG "v20-quiet-profile"
 #define GC_DIAG_WIDE L"v20-quiet-profile"
 #else
@@ -49,7 +49,7 @@
 #define GC_DIAG "v3"
 #define GC_DIAG_WIDE L"v3"
 #endif
-#include "../../unlock/format.h"
+#include "../unlock/format.h"
 #include <Protocol/LoadedImage.h>
 #include <Protocol/DevicePath.h>
 #include <Protocol/SimpleFileSystem.h>

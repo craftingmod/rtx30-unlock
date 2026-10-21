@@ -72,9 +72,9 @@ make test
 
 기존 파일을 재사용한다.
 
-- [`probe_app.c`](https://github.com/rough2515-hub/rtx3080-unlock-public/blob/main/probe_app.c): EFI 진입, PCI 탐색, GOP 열거, USB 로그 저장.
-- [`probe_core.c`](https://github.com/rough2515-hub/rtx3080-unlock-public/blob/main/probe_core.c): BAR 및 레지스터 수집, PROM 읽기.
-- `efi_runtime.c`: 별도 C 런타임 없이 EFI 빌드.
+- [`src/probe/probe_app.c`](https://github.com/rough2515-hub/rtx3080-unlock-public/blob/main/src/probe/probe_app.c): EFI 진입, PCI 탐색, GOP 열거, USB 로그 저장.
+- [`src/probe/probe_core.c`](https://github.com/rough2515-hub/rtx3080-unlock-public/blob/main/src/probe/probe_core.c): BAR 및 레지스터 수집, PROM 읽기.
+- `src/probe/efi_runtime.c`: 별도 C 런타임 없이 EFI 빌드.
 
 **수정사항**
 
@@ -87,7 +87,7 @@ make test
 7. Probe에서는 **MMIO 쓰기, Bus Master 활성화, FLR, 펌웨어 로드·실행, BootOrder/NVRAM 변경을 금지**한다.
 8. 로그 출력·저장에 실패해도 GPU를 건드리지 않는 상태로 종료한다.
 
-현재 구현의 후보 판별은 `gpu_family.h`를 공유한다. 후보 PCI 판별 후 최초 MMIO에서 실제 칩을 검사한다.
+현재 구현의 후보 판별은 `src/probe/gpu_family.h`를 공유한다. 후보 PCI 판별 후 최초 MMIO에서 실제 칩을 검사한다.
 
 ```c
 static BOOLEAN IsNvidiaDisplay(const UINT32 *config) {
@@ -178,7 +178,7 @@ make profile REPORT=probe/REPORT.TXT PROM=probe/PROM.BIN
 
 ### Phase 4 — `make test`: 호환성 및 회귀 검사
 
-1. **Host/mock 테스트:** 기존 `test_core.c`, `unlock/tests/`, `unlock/test-all.ps1` 활용.
+1. **Host/mock 테스트:** 기존 `src/probe/test_core.c`, `src/unlock/tests/`, `unlock/test-all.ps1` 활용.
 2. **Probe 테스트:** 서로 다른 PCI ID, 복수 GPU, BAR 크기 오류, 접근 불가 MMIO, USB 로그 실패.
 3. **Profile 테스트:** 누락·손상된 REPORT/PROM, 중복 키, 다른 VBIOS 해시, 미지원 아키텍처.
 4. **Unlock 사전검사:** 대상 GPU의 PCI/SubVendor/SubDevice, 칩 식별, 메모리 레이아웃, PROM 해시, 펌웨어 자산 해시, 초기 레지스터, 디스플레이 소유권, DMA 매핑 가능 여부 검증.
@@ -188,7 +188,7 @@ make profile REPORT=probe/REPORT.TXT PROM=probe/PROM.BIN
 
 ### Phase 5 — `make unlock`: 검증된 프로필로 빌드
 
-기존 `unlock/build.ps1`과 `unlock/port.h`, `unlock/app.c`, `unlock/checks.c`, `unlock/port.c`를 프로필 기반 구조로 리팩터링한다.
+기존 `unlock/build.ps1`과 `src/unlock/port.h`, `src/unlock/app.c`, `src/unlock/checks.c`, `src/unlock/port.c`를 프로필 기반 구조로 리팩터링한다.
 
 | 기존 고정 조건 | 변경 설계 |
 | --- | --- |
@@ -248,38 +248,22 @@ make unlock
 
 Windows 개발 환경에 GNU Make가 없다면 PowerShell 래퍼 명령으로 동일한 작업을 제공해도 된다. 기존 프로젝트의 LLVM/clang 및 `lld-link` 빌드 방식을 재사용한다.
 
-## 5. 예상 디렉터리 구조
+## 5. 소스 디렉터리 구조
 
 ```text
 rtx30-uefi-unlock/
-├── Makefile
-├── probe_app.c
-├── probe_core.c
-├── probe_core.h
-├── efi_runtime.c
-├── scripts/
-│   ├── build-probe.ps1          # 신규
-│   └── build-unlock.ps1         # 신규
-├── tools/
-│   ├── probe-to-profile.py     # 신규
-│   └── package_probe_usb.py    # 신규(선택)
+├── src/
+│   ├── probe/          # Probe EFI, profile capture and tests
+│   ├── unlock/         # Unlock EFI core, vendor code and tests
+│   └── gop/            # GOP, FLR, display recovery and tests
+├── scripts/            # Build entry points and toolchain setup
+├── tools/              # Profile processing and package tools
+├── unlock/             # Build/test launchers, assets and generated output
+├── experiments/gop/    # GOP instructions and test launchers
+├── docs/
 ├── profiles/
-│   └── board.json              # 기기별 생성 파일
-├── build/
-│   └── probe/
-│       └── BOOTX64.EFI
-├── unlock/
-│   ├── app.c
-│   ├── checks.c
-│   ├── port.c
-│   ├── port.h
-│   ├── compat.c
-│   ├── build.ps1
-│   ├── test-all.ps1
-│   └── vendor/
-│       └── ...
-└── deps/
-    └── edk2/
+├── build/              # Generated EFI and package output
+└── deps/edk2/          # UEFI headers
 ```
 
 ## 6. 펌웨어 자산

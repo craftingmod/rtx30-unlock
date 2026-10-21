@@ -1,8 +1,8 @@
 #include "patch.h"
 #include "visual.h"
-#include "../../unlock/port.h"
-#include "../../unlock/app_io.h"
-#include "../../unlock/vendor/gfw_eval.h"
+#include "../unlock/port.h"
+#include "../unlock/app_io.h"
+#include "../unlock/vendor/gfw_eval.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

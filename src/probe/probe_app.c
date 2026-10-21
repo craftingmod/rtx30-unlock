@@ -4,7 +4,7 @@
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/GraphicsOutput.h>
 #include <Guid/FileInfo.h>
-#include "unlock/sha256.h"
+#include "../unlock/sha256.h"
 
 static EFI_GUID PciGuid = EFI_PCI_IO_PROTOCOL_GUID;
 static EFI_GUID LoadedGuid = EFI_LOADED_IMAGE_PROTOCOL_GUID;

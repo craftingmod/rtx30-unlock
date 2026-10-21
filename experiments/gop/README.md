@@ -83,7 +83,7 @@ Windows 수집 시각은 `2026-10-21T01:53:43+09:00`, Windows가 보고한 LastB
 
 Windows 제품명은 `NVIDIA GeForce RTX 3090 Ti`, 보고된 메모리는 24564MiB이다. PCI ID `2203:10DE`, Subsystem `2000:7377`, BDF `0000:01:00.0`는 UEFI 대상과 일치한다. 사용자는 v13과 **같은 카드·VBIOS**라고 확인했다. 이 제품명/메모리 보고만으로 카드 교체나 패치 성능 효과를 추론하지 않는다.
 
-`BenchmarkState=not-run`, BenchmarkExitCode/Sha256=null이며 벤치마크 JSON은 제공되지 않았다. 따라서 CUDA 실행 성공·결과 정확성·성능 향상·Windows 초기화 후 셀렉터 보존은 미검증이다. 이 결과를 수집할 당시 `analysis/compute-benchmark.cu`와 `windows-check.ps1`은 제품명을 RTX 3080으로 제한했다. 이후 제품명 제한을 제거하고 대상 PCI 위치 `0000:01:00.0`와 중복 대상 거부, 결과 검증은 유지했다. 실제 제품명은 JSON에 그대로 남긴다. 같은 벤치마크 실행 파일·드라이버·조건으로 패치 전후를 비교해야 한다. 이번 `not-run`이 이 제한 때문에 발생했다고 단정하지는 않는다.
+`BenchmarkState=not-run`, BenchmarkExitCode/Sha256=null이며 벤치마크 JSON은 제공되지 않았다. 따라서 CUDA 실행 성공·결과 정확성·성능 향상·Windows 초기화 후 셀렉터 보존은 미검증이다. 이 결과를 수집할 당시 `src/gop/compute-benchmark.cu`와 `windows-check.ps1`은 제품명을 RTX 3080으로 제한했다. 이후 제품명 제한을 제거하고 대상 PCI 위치 `0000:01:00.0`와 중복 대상 거부, 결과 검증은 유지했다. 실제 제품명은 JSON에 그대로 남긴다. 같은 벤치마크 실행 파일·드라이버·조건으로 패치 전후를 비교해야 한다. 이번 `not-run`이 이 제한 때문에 발생했다고 단정하지는 않는다.
 
 원본은 `captures/v14-windows-handoff-result/`에 전체 복사하고 모든 파일의 SHA256 일치를 확인했다. 사용자 제공 `V14RESULT/`는 수정하지 않았다.
 
@@ -350,7 +350,7 @@ python tools/package_gop_experiment.py --output build/gop-experiment-usb-v8-virt
 
 PCI 사후 256바이트는 분석 자료다. FLR이나 GOP 초기화가 바꿀 수 있는 상태 필드까지 전부 동일하다고 자동 인증하지는 않는다. 이 실험의 성공도 **패치한 셀렉터가 GOP 재초기화 뒤 유지되는지, 실제 연산 언락과 Windows 드라이버 인계가 되는지**를 증명하지 않는다. 이 항목은 후속 실험이다.
 
-FLR 및 PCI 복원 순서는 기존 `unlock/port.c`의 checked FLR/복원 절차를 참고했다. 새 실험은 해당 언락 코어를 링크하지 않고 별도의 PCI 전용 구현을 사용한다. 모의 검사는 한 번의 리셋·100ms 접근 금지·BME 조건·남은 GOP 거부·EDID Stop의 입력 영향·새 핸들·부분 실패·독점 해제 실패와 복구 실패를 확인하지만, 실제 NVIDIA/보드 펌웨어의 재초기화 성공은 아직 미검증이다.
+FLR 및 PCI 복원 순서는 기존 `src/unlock/port.c`의 checked FLR/복원 절차를 참고했다. 새 실험은 해당 언락 코어를 링크하지 않고 별도의 PCI 전용 구현을 사용한다. 모의 검사는 한 번의 리셋·100ms 접근 금지·BME 조건·남은 GOP 거부·EDID Stop의 입력 영향·새 핸들·부분 실패·독점 해제 실패와 복구 실패를 확인하지만, 실제 NVIDIA/보드 펌웨어의 재초기화 성공은 아직 미검증이다.
 
 ## 이전 해제 실험: diagnostic v5-leaf
 

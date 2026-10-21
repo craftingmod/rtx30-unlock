@@ -1,5 +1,5 @@
 #include "probe_profile.h"
-#include "unlock/sha256.h"
+#include "../unlock/sha256.h"
 #include "gpu_family.h"
 
 static VOID Put32(UINT8 *p, UINT32 value) {

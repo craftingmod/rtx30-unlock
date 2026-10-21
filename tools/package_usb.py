@@ -66,7 +66,7 @@ def prepare(root, assets, output):
     if digest(efi) != manifest['EfiSha256'].lower():
         raise ValueError('EFI hash differs from build manifest; rebuild first.')
     for item in manifest['Sources']:
-        name = 'unlock/' + item['Path'].replace('\\', '/')
+        name = item['Path'].replace('\\', '/')
         if name not in source_files or digest(source_files[name]) != item['Sha256'].lower():
             raise ValueError('Build source changed; rebuild first: ' + name)
     spec = importlib.util.spec_from_file_location('usb_pe_verifier', root / 'unlock/verify_pe.py')

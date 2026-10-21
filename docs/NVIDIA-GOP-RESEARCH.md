@@ -16,13 +16,13 @@ GOP 재연결 후 언락 상태 유지와 Windows 부팅 성공이 가장 큰 �
 
 ### 저장소
 
-- `unlock/app.c:58`의 `DisplayCheck()`는 기본 빌드에서 Intel에 해당하는 고정 경로만 허용한다. 프로필 빌드는 `GuIndependentDisplay()`로 타깃과 다른 PCI 장치인지 확인하므로 이미 Intel 제조사에 한정되지 않는다. 다만 타깃 GOP가 열거되면 전체 검사를 거부한다.
-- `unlock/checks.c:10`은 PCI handle/프로토콜/BDF를 비교한다. `:172`의 `GuDisplayPath()`는 고정 PCI 경로를 해석한다. Intel 문자열만 바꾸는 것으로 단일 GPU 지원이 되지 않는다.
-- `unlock/ownership.c:55`의 `GuFindReleaseOwner()`는 단일 드라이버만 허용하고 모든 활성 자식 관계를 거부한다. GOP가 자식 핸들을 생성한 환경을 처리할 수 없다.
-- `unlock/app.c:341`부터 화면·소유권 검사를 수행하고, U 승인 후 `DisconnectController()`와 재검사를 수행한다. 종료 시 독점 프로토콜을 닫지만 `ConnectController()`로 화면을 복구하는 경로는 없다.
-- `unlock/app_io.c:30`은 USB 로그마다 먼저 `GuConsole()`을 호출한다. 콘솔 오류는 `LogFault`, armed 상태에서는 `Gu.fault`까지 설정한다. 화면 해제 후에는 정상적인 USB 기록까지 실패 취급될 수 있다. 오류가 없어도 오래된 콘솔의 GPU 접근을 허용하면 안 된다.
-- `unlock/compat.c:85`의 `aperture_remove_conflicting_pci_devices()`는 실제 제거 대신 화면 검사를 재실행한다. 이름이 같아도 Linux의 프레임버퍼 제거 기능을 제공하지 않는다.
-- `unlock/vendor/unlock_610.c`의 `unlock_transaction_reset()`은 BME 해제, aperture 처리, FLR, PCI 복원, GFW/WPR2/셀렉터 확인을 수행한다. `unlock/port.c:210`도 FLR 전 `display_ok`를 요구한다.
+- `src/unlock/app.c:58`의 `DisplayCheck()`는 기본 빌드에서 Intel에 해당하는 고정 경로만 허용한다. 프로필 빌드는 `GuIndependentDisplay()`로 타깃과 다른 PCI 장치인지 확인하므로 이미 Intel 제조사에 한정되지 않는다. 다만 타깃 GOP가 열거되면 전체 검사를 거부한다.
+- `src/unlock/checks.c:10`은 PCI handle/프로토콜/BDF를 비교한다. `:172`의 `GuDisplayPath()`는 고정 PCI 경로를 해석한다. Intel 문자열만 바꾸는 것으로 단일 GPU 지원이 되지 않는다.
+- `src/unlock/ownership.c:55`의 `GuFindReleaseOwner()`는 단일 드라이버만 허용하고 모든 활성 자식 관계를 거부한다. GOP가 자식 핸들을 생성한 환경을 처리할 수 없다.
+- `src/unlock/app.c:341`부터 화면·소유권 검사를 수행하고, U 승인 후 `DisconnectController()`와 재검사를 수행한다. 종료 시 독점 프로토콜을 닫지만 `ConnectController()`로 화면을 복구하는 경로는 없다.
+- `src/unlock/app_io.c:30`은 USB 로그마다 먼저 `GuConsole()`을 호출한다. 콘솔 오류는 `LogFault`, armed 상태에서는 `Gu.fault`까지 설정한다. 화면 해제 후에는 정상적인 USB 기록까지 실패 취급될 수 있다. 오류가 없어도 오래된 콘솔의 GPU 접근을 허용하면 안 된다.
+- `src/unlock/compat.c:85`의 `aperture_remove_conflicting_pci_devices()`는 실제 제거 대신 화면 검사를 재실행한다. 이름이 같아도 Linux의 프레임버퍼 제거 기능을 제공하지 않는다.
+- `src/unlock/vendor/unlock_610.c`의 `unlock_transaction_reset()`은 BME 해제, aperture 처리, FLR, PCI 복원, GFW/WPR2/셀렉터 확인을 수행한다. `src/unlock/port.c:210`도 FLR 전 `display_ok`를 요구한다.
 - 공개 성공 로그 `evidence/unlock-boot-09/REPORT.TXT`는 독립 Intel 출력과 `children=0`인 소유자 해제 사례다. NVIDIA 출력 카드의 GOP 복구 성공을 보여주지 않는다.
 
 ### 외부 1차 자료

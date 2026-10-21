@@ -20,7 +20,7 @@ $jobs=@(
  @{Name='port';Kind='cmd';Path='unlock/test-port.cmd'},
  @{Name='checks';Kind='cmd';Path='unlock/test-checks.cmd'},
  @{Name='runtime';Kind='cmd';Path='unlock/test-runtime.cmd'},
- @{Name='pe';Kind='python';Path='unlock/tests/test_pe.py'},
+ @{Name='pe';Kind='python';Path='src/unlock/tests/test_pe.py'},
  @{Name='usb-package';Kind='python';Path='tools/test_package_usb.py'}
 )
 if($WithLocalFixtures) {

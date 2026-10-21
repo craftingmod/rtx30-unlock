@@ -6,9 +6,9 @@ import shutil
 import struct
 import sys
 
-root = Path(__file__).resolve().parents[1]
-build = root / "build"
-reference = root / "tests/reference/unlock_610_v06.c"
+root = Path(__file__).resolve().parents[3]
+build = root / "unlock/build"
+reference = root / "src/unlock/tests/reference/unlock_610_v06.c"
 # Same-line attribution notice added to the public v0.6 snapshot; code and line numbers are unchanged.
 reference_sha = "1440F0D0C974B8F1D985F48B5852BE7287ABE10BC66D468FCA3833E3CDBC9BAB"
 
@@ -24,7 +24,7 @@ if sys.argv[1:] == ["--prepare"]:
     (stage / "vendor").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(reference, stage / "vendor/unlock_610.c")
     # Resolve the archived relative include to the same pragma-once file.
-    (stage / "port.h").write_text('#include "../../port.h"\n', encoding="ascii")
+    (stage / "port.h").write_text('#include "../../../src/unlock/port.h"\n', encoding="ascii")
     print("Pinned v0.6 reference prepared")
     sys.exit(0)
 if sys.argv[1:]:
@@ -54,7 +54,7 @@ if at != len(data):
     raise ValueError("Trailing or truncated trace")
 record = {"AllMatched": True, "HardwareAccess": False,
           "ReferenceCoreSha256": reference_sha,
-          "CurrentCoreSha256": sha(root / "vendor/unlock_610.c"),
+          "CurrentCoreSha256": sha(root / "src/unlock/vendor/unlock_610.c"),
           "TraceSha256": sha(current), "Scenarios": cases,
           "Scope": "Current versus archived v0.6 core using the SAME current port/compat and simulated EFI services. Not historical adapter equivalence or physical bus-driver transactions. Extra reads/logging may change timing."}
 (build / "fwsec-sequence-verification.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")

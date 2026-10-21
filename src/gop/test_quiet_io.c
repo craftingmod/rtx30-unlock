@@ -1,5 +1,5 @@
 /* Real unlock file IO with fake firmware; no filesystem or GPU access. */
-#include "../../unlock/app_io.c"
+#include "../unlock/app_io.c"
 static EFI_GUID PathGuid = EFI_DEVICE_PATH_PROTOCOL_GUID;
 #include <assert.h>
 #include <stdlib.h>

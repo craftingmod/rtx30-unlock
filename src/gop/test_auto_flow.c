@@ -1,11 +1,11 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define SSD_FLOW_MAIN SsdFlowChecks
 #include "test_ssd_flow.c"
-#include "../../probe_profile.h"
-#include "../../unlock/sha256.h"
+#include "../probe/probe_profile.h"
+#include "../unlock/sha256.h"
 /* Exercise real staging/commit logic; only capture and live PROM reads are simulated. */
 #define GuProfilePromChanged RealPromChanged
-#include "../../unlock/profile_probe.c"
+#include "../unlock/profile_probe.c"
 #undef GuProfilePromChanged
 static UINT8 Bytes[176], Original[176], Fresh[176];
 static EFI_FILE_PROTOCOL ProfileFile, ProbeDir;

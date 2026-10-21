@@ -10,6 +10,8 @@ Intel GOP 없이 타깃 NVIDIA 카드로 출력하는 환경을 위한 [GOP 해�
 
 MSI RTX 3080 10GB에서 검증한 Windows용 UEFI 연산 언락 실험입니다. USB로 UEFI 앱을 실행한 뒤, 재부팅 없이 Windows로 이어서 부팅합니다.
 
+구현 소스와 관련 테스트는 `src/probe/`, `src/unlock/`, `src/gop/`에 모여 있습니다. 빌드·테스트 실행 스크립트와 결과물은 각각 `scripts/`, 기존 `unlock/`·`experiments/gop/`, `build/`에 있습니다.
+
 **실기 검증 범위는 아래의 MSI RTX 3080 환경입니다.** 다른 RTX 30 GA10x GPU는 프로필 기반 실험 모드로 시도할 수 있습니다. 실험 모드에서도 장치·화면 경로·펌웨어 검사에 맞지 않으면 실행을 거부합니다.
 
 ## 범용 Probe 및 실험적 RTX 30 GA10x 포트
@@ -82,7 +84,7 @@ bun run format        # 포맷 적용
 bun run format:check  # 변경 없이 검사 (불일치 시 실패)
 ```
 
-clang-format은 `PATH`에서 찾으며 `LLVM_BIN`으로 설치 폴더를 지정할 수 있습니다. Git 추적 C/C++/CUDA 파일을 대상으로 하고, `.clang-format-ignore`에 지정한 외부 코드(`deps/`, `unlock/vendor/`), 고정 비교 스냅샷(`unlock/tests/reference/`), 생성물은 제외합니다. 새 소스 파일은 Git에 추가한 뒤 실행하세요. 포맷 적용 후 릴리스 패키지를 만들 때는 [소스 manifest 갱신 절차](TESTING.md#소스와-패키지-해시)를 따릅니다.
+clang-format은 `PATH`에서 찾으며 `LLVM_BIN`으로 설치 폴더를 지정할 수 있습니다. Git 추적 C/C++/CUDA 파일을 대상으로 하고, `.clang-format-ignore`에 지정한 외부 코드(`deps/`, `src/unlock/vendor/`), 고정 비교 스냅샷(`src/unlock/tests/reference/`), 생성물은 제외합니다. 새 소스 파일은 Git에 추가한 뒤 실행하세요. 포맷 적용 후 릴리스 패키지를 만들 때는 [소스 manifest 갱신 절차](TESTING.md#소스와-패키지-해시)를 따릅니다.
 
 ### 빌드 실행
 

@@ -1,6 +1,6 @@
 #include "runtime_profile.h"
 #include "sha256.h"
-#include "../gpu_family.h"
+#include "../probe/gpu_family.h"
 #include <Guid/FileInfo.h>
 
 GU_RUNTIME_PROFILE GuProfile;

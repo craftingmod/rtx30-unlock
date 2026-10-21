@@ -1,5 +1,5 @@
 #define main PortRegressionMain
-#include "../../unlock/tests/test_port.c"
+#include "../unlock/tests/test_port.c"
 #undef main
 static BOOLEAN FailBegin, FailEnd, MasterRace;
 static unsigned BeginCalls, EndCalls;

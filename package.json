@@ -4,11 +4,13 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "format": "bun tools/format.ts",
+    "format:c": "bun tools/format.ts",
+    "format:ts": "oxfmt ./tools",
     "format:check": "bun tools/format.ts --check"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "oxfmt": "^0.74.0"
   },
   "peerDependencies": {
     "typescript": "^7"

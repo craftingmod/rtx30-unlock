@@ -1,6 +1,6 @@
 #include "../checks.h"
 #include "../vendor/layout_610.h"
-#include "../../gpu_family.h"
+#include "../../probe/gpu_family.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

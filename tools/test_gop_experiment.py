@@ -66,7 +66,7 @@ class GopPackage(unittest.TestCase):
                 self.assertEqual((output / 'RTX-UNLOCK/PROFILE.BIN').stat().st_size, 176)
             if manifest.get('WindowsHandoff'):
                 for source, name in (('experiments/gop/windows-check.ps1', 'check.ps1'),
-                                     ('analysis/compute-benchmark.cu', 'compute-benchmark.cu'),
+                                     ('src/gop/compute-benchmark.cu', 'compute-benchmark.cu'),
                                      ('analysis/build-benchmark.cmd', 'build-benchmark.cmd'),
                                      ('results/benchmark.json', 'historical-benchmark.json')):
                     self.assertEqual((output / 'WINDOWS' / name).read_bytes(),
@@ -74,8 +74,8 @@ class GopPackage(unittest.TestCase):
                 self.assertFalse((output / 'WINDOWS/compute-benchmark.exe').exists())
             self.assertEqual((output / 'EFI/BOOT/BOOTX64.EFI').read_bytes(),
                              (ROOT / 'build/gop-experiment/BOOTX64.EFI').read_bytes())
-            for source in ('experiments/gop/cycle.h', 'experiments/gop/cycle.c', 'experiments/gop/tree.c',
-                           'experiments/gop/tree.h', 'unlock/runtime.c', 'unlock/runtime.h',
+            for source in ('src/gop/cycle.h', 'src/gop/cycle.c', 'src/gop/tree.c',
+                           'src/gop/tree.h', 'src/unlock/runtime.c', 'src/unlock/runtime.h',
                            'scripts/build-gop-experiment.ps1',
                            'deps/edk2/MdePkg/Include/Uefi.h'):
                 self.assertEqual((output / 'SOURCE' / source).read_bytes(),
@@ -174,8 +174,8 @@ class GopPackage(unittest.TestCase):
                 self.assertFalse((automatic / 'RTX-UNLOCK/PROFILE.BIN').exists())
                 self.assertTrue((automatic / 'RTX-UNLOCK/DEBUG.ON').exists())
                 self.assertIn('PROBE00', (automatic / 'RTX-UNLOCK/README.txt').read_text())
-                self.assertTrue((automatic / 'SOURCE/probe_profile.c').is_file())
-                self.assertTrue((automatic / 'SOURCE/test_core.c').is_file())
+                self.assertTrue((automatic / 'SOURCE/src/probe/probe_profile.c').is_file())
+                self.assertTrue((automatic / 'SOURCE/src/probe/test_core.c').is_file())
             else:
                 with self.assertRaisesRegex(ValueError, 'requires --profile'):
                     package(Path(directory) / 'missing')

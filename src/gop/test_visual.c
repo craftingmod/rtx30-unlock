@@ -1,6 +1,6 @@
 /* Real visual/timing code, with no GPU or firmware services. */
 #include "visual.c"
-#include "../../unlock/format.h"
+#include "../unlock/format.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>

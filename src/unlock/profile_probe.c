@@ -1,4 +1,4 @@
-#include "../probe_profile.h"
+#include "../probe/probe_profile.h"
 #include "runtime_profile.h"
 #include "sha256.h"
 

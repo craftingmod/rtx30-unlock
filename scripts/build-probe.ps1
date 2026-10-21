@@ -5,7 +5,7 @@ Push-Location $root
 try {
     New-Item -ItemType Directory -Path build/probe -Force | Out-Null
     $objects = @()
-    foreach ($source in @('probe_app', 'probe_core', 'probe_profile', 'efi_runtime', 'unlock/sha256')) {
+    foreach ($source in @('src/probe/probe_app', 'src/probe/probe_core', 'src/probe/probe_profile', 'src/probe/efi_runtime', 'src/unlock/sha256')) {
         $object = 'build/probe/' + ($source -replace '/', '_') + '.obj'
         & "$llvmRoot/clang.exe" -target x86_64-pc-windows-msvc -std=c11 -ffreestanding -fno-builtin -fno-stack-protector -mno-red-zone -fshort-wchar -Os -Wall -Wextra -Werror -I deps/edk2/MdePkg/Include -I deps/edk2/MdePkg/Include/X64 -c "$source.c" -o $object
         if ($LASTEXITCODE -ne 0) { throw "Probe compile failed: $source" }

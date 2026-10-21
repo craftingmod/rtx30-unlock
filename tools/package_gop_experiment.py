@@ -28,17 +28,17 @@ def package(output, root=ROOT, assets=None, profile=None):
     mode = manifest.get('Mode', 'cycle')
     if mode not in ('cycle', 'tree-read-only', 'leaf-member', 'full-flr', 'full-unlock'):
         raise ValueError('Unknown experiment mode')
-    required = {'experiments/gop/app.c',
-                'scripts/build-gop-experiment.ps1', 'unlock/runtime.c', 'unlock/format.c'}
-    required.add({'tree-read-only': 'experiments/gop/tree.c', 'leaf-member': 'experiments/gop/leaf.c', 'cycle': 'experiments/gop/cycle.c', 'full-flr': 'experiments/gop/full.c', 'full-unlock': 'experiments/gop/full.c'}[mode])
+    required = {'src/gop/app.c',
+                'scripts/build-gop-experiment.ps1', 'src/unlock/runtime.c', 'src/unlock/format.c'}
+    required.add({'tree-read-only': 'src/gop/tree.c', 'leaf-member': 'src/gop/leaf.c', 'cycle': 'src/gop/cycle.c', 'full-flr': 'src/gop/full.c', 'full-unlock': 'src/gop/full.c'}[mode])
     if mode in ('full-flr', 'full-unlock'):
-        required.update({'experiments/gop/leaf.c', 'experiments/gop/reset.c'})
+        required.update({'src/gop/leaf.c', 'src/gop/reset.c'})
     if mode == 'full-unlock':
-        required.update({'unlock/app.c', 'unlock/app_io.c', 'unlock/port.c', 'unlock/assets.json',
-                         'unlock/vendor/unlock_610.c', 'experiments/gop/patch.h',
-                         'experiments/gop/visual.c', 'experiments/gop/visual.h'})
+        required.update({'src/unlock/app.c', 'src/unlock/app_io.c', 'src/unlock/port.c', 'unlock/assets.json',
+                         'src/unlock/vendor/unlock_610.c', 'src/gop/patch.h',
+                         'src/gop/visual.c', 'src/gop/visual.h'})
         if manifest.get('ExternalProfile'):
-            required.update({'unlock/runtime_profile.c', 'unlock/runtime_profile.h',
+            required.update({'src/unlock/runtime_profile.c', 'src/unlock/runtime_profile.h',
                              'tools/runtime_profile.py'})
         else:
             required.update({'build/gop-experiment/profile.h', 'build/gop-experiment/board.json'})
@@ -47,22 +47,22 @@ def package(output, root=ROOT, assets=None, profile=None):
     if manifest.get('WindowsHandoff'):
         if mode != 'full-unlock':
             raise ValueError('Windows handoff requires full-unlock mode')
-        required.update({'experiments/gop/windows.c', 'experiments/gop/windows.h',
-                         'experiments/gop/test_windows.c', 'experiments/gop/test-windows.cmd',
-                         'experiments/gop/windows-check.ps1', 'analysis/compute-benchmark.cu',
+        required.update({'src/gop/windows.c', 'src/gop/windows.h',
+                         'src/gop/test_windows.c', 'experiments/gop/test-windows.cmd',
+                         'experiments/gop/windows-check.ps1', 'src/gop/compute-benchmark.cu',
                          'analysis/build-benchmark.cmd', 'results/benchmark.json'})
     if manifest.get('Production'):
         if not manifest.get('WindowsHandoff') or mode != 'full-unlock':
             raise ValueError('Production requires Windows handoff and full-unlock')
-        required.update({'experiments/gop/test-production.cmd', 'experiments/gop/test_quiet_io.c'})
+        required.update({'experiments/gop/test-production.cmd', 'src/gop/test_quiet_io.c'})
     if manifest.get('SsdExperiment'):
         if not manifest.get('Production') or not manifest.get('WindowsHandoff') or mode != 'full-unlock':
             raise ValueError('SSD experiment requires production Windows handoff')
-        required.update({'unlock/boot_source.h', 'experiments/gop/test-ssd.cmd', 'experiments/gop/test_ssd_flow.c'})
+        required.update({'src/unlock/boot_source.h', 'experiments/gop/test-ssd.cmd', 'src/gop/test_ssd_flow.c'})
     if manifest.get('AutoProfile'):
         if not manifest.get('ExternalProfile'):
             raise ValueError('Auto profile requires external-profile mode')
-        required.update({'probe_app.c', 'probe_core.c', 'probe_core.h', 'probe_profile.c', 'probe_profile.h', 'unlock/profile_probe.c'})
+        required.update({'src/probe/probe_app.c', 'src/probe/probe_core.c', 'src/probe/probe_core.h', 'src/probe/probe_profile.c', 'src/probe/probe_profile.h', 'src/unlock/profile_probe.c'})
     profile_data = None
     if manifest.get('ExternalProfile'):
         if not manifest.get('SsdExperiment'):
@@ -146,7 +146,7 @@ def package(output, root=ROOT, assets=None, profile=None):
             windows = stage / 'WINDOWS'
             windows.mkdir()
             for source, name in (('experiments/gop/windows-check.ps1', 'check.ps1'),
-                                 ('analysis/compute-benchmark.cu', 'compute-benchmark.cu'),
+                                 ('src/gop/compute-benchmark.cu', 'compute-benchmark.cu'),
                                  ('analysis/build-benchmark.cmd', 'build-benchmark.cmd'),
                                  ('results/benchmark.json', 'historical-benchmark.json')):
                 shutil.copyfile(stage / 'SOURCE' / source, windows / name)

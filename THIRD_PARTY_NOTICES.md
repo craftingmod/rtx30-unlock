@@ -4,7 +4,7 @@
 
 - 원본: [Zagitta/gpu-unlock](https://github.com/Zagitta/gpu-unlock/tree/0ebdb1c6308b6a2072be5bf04513472942541956)
 - 고정 커밋: `0ebdb1c6308b6a2072be5bf04513472942541956`
-- 대상: `unlock/vendor/`의 `unlock_610`, `prep_610`, `layout_610`, `vbios_610`, `gfw_eval`, `diagnostic.h`.
+- 대상: `src/unlock/vendor/`의 `unlock_610`, `prep_610`, `layout_610`, `vbios_610`, `gfw_eval`, `diagnostic.h`.
 - 라이선스 원문: [LICENSE](LICENSE).
 
 2026-10-18의 로컬 변경: MSI RTX 3080 대상 선택, UEFI의 checked I/O 및 실행·정리 상태 연결, FWSEC 진단. `tests/reference/unlock_610_v06.c`는 비교 검사에 사용하는 로컬 v0.6 스냅샷입니다. UEFI 포트와 host/mock 테스트도 GPL-2.0-only로 제공합니다. v0.10에서는 PCI I/O Attributes를 통해 Bus Master를 관리하고 프로토콜 상태와 실제 PCI Command를 함께 검사합니다.

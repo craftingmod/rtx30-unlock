@@ -4,7 +4,7 @@
 #include "checks.h"
 #include "sha256.h"
 #include "ownership.h"
-#include "../gpu_family.h"
+#include "../probe/gpu_family.h"
 #include "vendor/unlock_610.h"
 #include "vendor/gfw_eval.h"
 #include <Protocol/GraphicsOutput.h>
@@ -441,8 +441,8 @@ static VOID ReleaseHalt(EFI_STATUS Status, BOOLEAN Attempted) {
   Halt();
 }
 #ifdef GU_GOP_EXPERIMENT
-#include "../experiments/gop/patch.h"
-#include "../experiments/gop/visual.h"
+#include "../gop/patch.h"
+#include "../gop/visual.h"
 static BOOLEAN PatchIo;
 #ifdef GU_SSD_EXPERIMENT
 static BOOLEAN AlreadyApplied;

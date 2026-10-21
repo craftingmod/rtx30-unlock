@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #undef NULL
-#include "../../probe_profile.h"
+#include "../probe/probe_profile.h"
 static UINT32 Get32(const UINT8 *p) {
   return (UINT32)p[0] | ((UINT32)p[1] << 8) | ((UINT32)p[2] << 16) | ((UINT32)p[3] << 24);
 }

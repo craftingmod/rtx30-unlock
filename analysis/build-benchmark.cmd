@@ -11,5 +11,7 @@ call "%GU_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
 if errorlevel 1 exit /b 1
 set "GU_NVCC=nvcc.exe"
 if exist "%CUDA_PATH%\bin\nvcc.exe" set "GU_NVCC=%CUDA_PATH%\bin\nvcc.exe"
-"%GU_NVCC%" -std=c++17 -O3 -arch=sm_86 -Xcompiler /utf-8 compute-benchmark.cu -lcublas -o compute-benchmark.exe
+set "SOURCE=compute-benchmark.cu"
+if not exist "%SOURCE%" set "SOURCE=..\src\gop\compute-benchmark.cu"
+"%GU_NVCC%" -std=c++17 -O3 -arch=sm_86 -Xcompiler /utf-8 "%SOURCE%" -lcublas -o compute-benchmark.exe
 exit /b %errorlevel%
