@@ -266,7 +266,9 @@ static EFI_STATUS ColdCheck(VOID) {
   GuLog("cold state: chip=%#x plm=%#x gfw=%#x/%#x/%#x WPR2_HI=%#x SS0=%#x SS1=%#x\n",
     GU_BOARD_CHIP,plm,s.plm,s.boot,s.cpuctl,hi,ss0,ss1);
   if(Gu.fault || gpu_unlock_gfw_assess(&s) || hi>>4 || plm!=GU_INITIAL_PLM ||
+#ifndef GU_SSD_EXPERIMENT
     ss0!=GU_INITIAL_SS0 || (GU_PROFILE_BUILD ? ss1!=GU_INITIAL_SS1 : (ss1!=2 && ss1!=3)) ||
+#endif
     GuRead32(0x1183a4)!=GU_FB_MIB)return EFI_NOT_READY;
 #if GU_PROFILE_BUILD
   const UINT32 offsets[]=GU_LAYOUT_OFFSETS,values[]=GU_LAYOUT_VALUES;
@@ -332,6 +334,18 @@ static VOID ReleaseHalt(EFI_STATUS Status,BOOLEAN Attempted) {
 #include "../experiments/gop/patch.h"
 #include "../experiments/gop/visual.h"
 static BOOLEAN PatchIo;
+#ifdef GU_SSD_EXPERIMENT
+static BOOLEAN AlreadyApplied;
+BOOLEAN GxAlreadyApplied(VOID){return AlreadyApplied;}
+EFI_STATUS GxInitialSelectors(GC_CONTEXT *c,BOOLEAN *skip){
+  *skip=FALSE;UINT32 chip=GuRead32(0),ss0=GuRead32(GU_FEAT_SS0_OFFSET),ss1=GuRead32(GU_FEAT_SS1_OFFSET);
+  EFI_STATUS s=Gu.fault?EFI_DEVICE_ERROR:chip!=GU_BOARD_CHIP?EFI_UNSUPPORTED:EFI_SUCCESS;
+  if(s==EFI_SUCCESS)*skip=ss0==0x88888888U;
+  if(!c->log("SELECTOR_PREFLIGHT SS0=%08x SS1=%08x skip=%u relaxed_initial_selectors=1 status=%#llx\n",
+    ss0,ss1,*skip,(unsigned long long)s))return EFI_DEVICE_ERROR;
+  return s;
+}
+#endif
 static GC_CONTEXT *PhaseContext;
 BOOLEAN GuPhase(const char *phase){
   if(!GvMark(PhaseContext,phase)){Gu.fault=TRUE;return FALSE;}
@@ -339,15 +353,28 @@ BOOLEAN GuPhase(const char *phase){
 }
 EFI_STATUS GxPrepare(GC_CONTEXT *c) {
   Table=c->table;GuInit(Table->BootServices,c->pci);Gu.image=c->image;Gu.handle=c->target;
-  PhaseContext=c;EFI_STATUS clock=GvClockInit(c);if(EFI_ERROR(clock))return clock;
+  PhaseContext=c;
+#ifdef GU_SSD_EXPERIMENT
+  AlreadyApplied=FALSE;
+#endif
+  EFI_STATUS clock=GvClockInit(c);if(EFI_ERROR(clock))return clock;
   if(!GuPhase("preflight-begin"))return EFI_DEVICE_ERROR;
   PatchIo=TRUE;GuIoSetQuiet(c->quiet);
   EFI_STATUS s=GuIoOpen(c->image,Table);
   if(!EFI_ERROR(s))s=ConfigCheck(TRUE);
   if(!EFI_ERROR(s))s=BarCheck();
+#ifdef GU_SSD_EXPERIMENT
+  if(!EFI_ERROR(s))s=GxInitialSelectors(c,&AlreadyApplied);
+  if(!EFI_ERROR(s) && !AlreadyApplied)s=ColdCheck();
+#else
   if(!EFI_ERROR(s))s=ColdCheck();
+#endif
   if(!EFI_ERROR(s))s=PromCheck();
-  if(!EFI_ERROR(s)){
+  if(!EFI_ERROR(s)
+#ifdef GU_SSD_EXPERIMENT
+    && !AlreadyApplied
+#endif
+    ){
     if(!GuPhase("assets-begin"))s=EFI_DEVICE_ERROR;
     else {s=GuLoadAssets();if(!GuPhase("assets-end"))s=EFI_DEVICE_ERROR;}
   }

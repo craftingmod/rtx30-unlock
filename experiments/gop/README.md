@@ -1,6 +1,25 @@
 # NVIDIA GOP 해제·복구 실험 1
 
-## 현재 빌드: v15-auto-windows (production 옵션, 실기 미검증)
+## 현재 실험: v16-ssd-selectors (실기 미검증)
+
+사용자 요청에 따라 **SSD EFI 지원**과 **초기 SS0 기반 스킵/시도** 정책을 별도 `-SsdExperiment` 빌드에 적용한다. 이 옵션은 `-FullUnlock -WindowsHandoff -Production`과 함께 사용한다. 기본 자동 실행·DEBUG.ON 선택 로깅을 유지한다. 기존 v15 빌드의 USB 전용·초기 셀렉터 기대값 검사는 옵션을 생략하면 그대로다.
+
+- 실행 매체는 기존 USB 또는 PartitionInfo 프로토콜에서 GPT EFI System Partition GUID가 확인된 볼륨만 허용한다. 일반 SSD 데이터 파티션, MBR 또는 PartitionInfo가 없는 SSD는 거부한다. GOP 로그와 UNLOCK 자산/로그가 같은 검사 함수를 사용한다. 파일은 항상 실제 EFI를 실행한 볼륨에서 찾는다.
+- PCI/칩/BAR 검사를 거친 초기 SS0가 `0x88888888`이면 이미 적용된 것으로 취급한다. SS1 값은 기록하지만 스킵 조건에 추가하지 않는다. PROM 해시는 검사하고 자산 읽기·GOP 계획/해제·펌웨어 실행·FLR·SetMode는 모두 건너뛴 뒤 Windows로 이어진다. 화면에 `SS0 already 88888888. Unlock skipped.`를 표시한다. 이는 SS1이나 실제 연산 효과까지 검증했다는 뜻은 아니다.
+- SS0가 다른 값이면 기존 초기 SS0/SS1 기대값과 달라도 그 이유만으로 거부하지 않는다. 0/0도 이 값 비교만으로 거부하지 않는다. 다만 PROM·장치/칩·BAR·레이아웃·GFW·WPR·PLM·DMA/소유권 및 읽기 오류 검사는 유지한다. 따라서 다른 상태 검사가 실패하면 적용하지 않는다. 접근 불가를 나타내는 all-ones 값 등에 대한 하위 펌웨어 경로의 오류 처리도 유지한다.
+- 실제 적용 후에는 두 셀렉터가 `88888888 / 8`인지, 단일 FLR·DMA 정리·GOP 복구·모드 왕복·색상 읽기가 성공했는지 기존대로 확인한다. 실패한 적용 뒤 Windows로 넘어가지 않는다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experiment.ps1 -FullUnlock -WindowsHandoff -Production -SsdExperiment -Profile profiles/board-refresh-run01.json
+experiments\gop\test-ssd.cmd
+python tools/package_gop_experiment.py --output build/gop-experiment-v16-ssd-selectors --zip build/gop-experiment-v16-ssd-selectors.zip --assets assets
+```
+
+I: SSD EFI 시험에서는 패키지의 `EFI/BOOT/BOOTX64.EFI`를 해당 경로에 교체하고 `RTX30-GOP-TEST`, `RTX3080-UNLOCK/ASSETS`는 EFI를 실행할 볼륨의 루트에 둔다. 기존 `RTX30-GOP-TEST/DEBUG.ON`과 과거 RUN은 보존한다. 첫 시험은 DEBUG.ON을 켠 상태로 진행한다. 부팅 화면에서 **v16-ssd-selectors**, `Boot source accepted. Logging ON`을 확인한다. 키 입력 없이 적용/스킵 뒤 Windows로 이어진다. 새 두 REPORT와 Windows 수집 결과로 어느 경로가 실행됐는지 확인한다. 새 NVRAM 항목 등록이나 Windows Boot Manager 파일 변경은 이 빌드/패키지 생성에 포함하지 않는다.
+
+현재 I:에 실제 파일을 설치하거나 재부팅하지 않았으며, SSD PartitionInfo 제공 여부·실행 시간·예상 외 초기값에서의 적용 성공은 실기 미검증이다. 중단 시 전원 종료 후 로그를 회수하며 같은 부팅에서 재시도하지 않는다.
+
+## 이전 빌드: v15-auto-windows (production 옵션, 실기 미검증)
 
 `-FullUnlock -WindowsHandoff -Production`은 기존 보드·초기값·PROM·자산 해시·독점 접근·단일 FLR·DMA 정리·GOP 복구·모드 왕복·색상 읽기·셀렉터 검사를 유지하고 **U 입력 없이 자동 진행**한다. Windows 후보가 하나인지도 먼저 검증한다. 성공한 경우에만 Windows로 이어진다. `-Production`을 생략하면 기존 v14 수동 U/상세 기록 동작이다. production이라는 옵션명은 실기 안정성 인증을 뜻하지 않는다.
 
@@ -19,6 +38,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-gop-experi
 experiments\gop\test-production.cmd
 python tools/package_gop_experiment.py --output build/gop-experiment-usb-v15-auto-windows --zip build/gop-experiment-usb-v15-auto-windows.zip --assets assets
 ```
+
+### DEBUG.ON 미생성 신고 점검 (2026-10-21)
+
+사용자가 지정한 I:를 관리자 권한으로 읽기 전용 확인했다. `I:\RTX30-GOP-TEST\DEBUG.ON`은 실제 이름이 맞는 0바이트 일반 파일이었고, `I:\EFI\BOOT\BOOTX64.EFI` SHA256도 v15 배포본 `aafd2f9d16b38601cfdd0ce3390dce8f842c92fa12b4176444c97415ba170584`와 일치했다. 그러나 I:의 장치는 USB가 아니라 NVMe Seagate FireCuda 520 SSD이며, FAT32 EFI 파티션이다.
+
+현재 `OpenLog`는 LoadedImage의 DeviceHandle이 USB 경로인지 먼저 확인하고, 그 뒤에야 DEBUG.ON을 조회한다. 자산 로더의 GuIoOpen도 USB 출처를 검사한다. 따라서 이 SSD에서 v15를 실행하면 디버그 트리거를 검사하기 전에 EFI_UNSUPPORTED로 거부되며 RUN/REPORT가 생기지 않는 것이 코드상 예상 결과다. 실제 어떤 UEFI 부팅 항목을 선택했는지는 이 파일 검사만으로 확인하지 않았다. 파일 확장자나 빈 파일 처리의 오류는 재현되지 않았고, 모의 검사도 DEBUG.ON의 정확한 이름·접근 오류 처리까지 보강해 통과했다. SSD 실행은 별도의 저장장치 허용 정책을 구현한 빌드가 필요하며, 이번 점검에서는 SSD 파일·파티션·NVRAM을 변경하지 않았다.
 
 현재는 **USB 시험용**이다. 앱과 자산 로더의 USB 출처 검사를 유지하므로 SSD EFI에 복사만 하면 실행을 거부한다. SSD 지원/설치와 NVRAM 등록은 별도 작업이다. SSD 설치 시 전용 경로(예: `\EFI\NvidiaUnlock\BOOTX64.EFI`)와 `NVIDIA Unlock + Windows` 같은 UEFI Boot#### Description을 사용할 수 있다. EFI 파일명과 메뉴 표시 이름은 별개이며 기존 Windows Boot Manager를 덮어쓰지 않고 새 항목으로 등록할 수 있다. 이번 작업에서는 디스크 파티션이나 부팅 항목을 변경하지 않았다.
 

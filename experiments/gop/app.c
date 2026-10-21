@@ -1,4 +1,5 @@
 #include "cycle.h"
+#include "../../unlock/boot_source.h"
 #if defined(GC_FULL_FLR)
 #include "full.h"
 #ifdef GC_FULL_UNLOCK
@@ -7,8 +8,13 @@
 #ifdef GC_WINDOWS_HANDOFF
 #include "windows.h"
 #ifdef GC_PRODUCTION
+#ifdef GU_SSD_EXPERIMENT
+#define GC_DIAG "v16-ssd-selectors"
+#define GC_DIAG_WIDE L"v16-ssd-selectors"
+#else
 #define GC_DIAG "v15-auto-windows"
 #define GC_DIAG_WIDE L"v15-auto-windows"
+#endif
 #else
 #define GC_DIAG "v14-windows-handoff"
 #define GC_DIAG_WIDE L"v14-windows-handoff"
@@ -44,7 +50,7 @@ static EFI_SYSTEM_TABLE *Table;
 static EFI_FILE_PROTOCOL *Report;
 static BOOLEAN LogFailed,Quiet;
 static CHAR16 *volatile Banner=L"\r\nNVIDIA GOP experiment / diagnostic " GC_DIAG_WIDE L"\r\n";
-static EFI_GUID PciGuid=EFI_PCI_IO_PROTOCOL_GUID,PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID,
+static EFI_GUID PciGuid=EFI_PCI_IO_PROTOCOL_GUID,
   LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID,FsGuid=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID,
   InfoGuid=EFI_FILE_INFO_ID,GlobalGuid=EFI_GLOBAL_VARIABLE;
 
@@ -80,17 +86,7 @@ static VOID ShowFailure(const char *stage,EFI_STATUS status) {
   Table->BootServices->Stall(20000000);
 }
 static BOOLEAN Usb(EFI_HANDLE device) {
-  EFI_DEVICE_PATH_PROTOCOL *p=NULL;
-  if(EFI_ERROR(Table->BootServices->HandleProtocol(device,&PathGuid,(VOID **)&p)) || !p)return FALSE;
-  BOOLEAN usb=FALSE;UINTN bytes=0;
-  for(UINTN i=0;i<64 && bytes+4<=4096;i++) {
-    UINTN length=p->Length[0]+((UINTN)p->Length[1]<<8);
-    if(length<4 || length>4096-bytes)return FALSE;
-    if(p->Type==MESSAGING_DEVICE_PATH && p->SubType==MSG_USB_DP && length==sizeof(USB_DEVICE_PATH))usb=TRUE;
-    if(p->Type==END_DEVICE_PATH_TYPE)return usb && length==4 && p->SubType==END_ENTIRE_DEVICE_PATH_SUBTYPE;
-    bytes+=length;p=(VOID *)((UINT8 *)p+length);
-  }
-  return FALSE;
+  return GuBootSourceAllowed(Table,device);
 }
 static EFI_STATUS CloseFile(EFI_FILE_PROTOCOL *file,EFI_STATUS status) {
   if(file && EFI_ERROR(file->Close(file)))return EFI_DEVICE_ERROR;
@@ -263,6 +259,11 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
   stage="console";status=Say(Banner);
   if(!Log("STAGE console status=%#llx\n",(unsigned long long)status)){status=EFI_DEVICE_ERROR;goto finish;}
   if(EFI_ERROR(status))goto finish;
+#ifdef GU_SSD_EXPERIMENT
+  status=Say(Quiet?L"Boot source accepted. Logging OFF (no DEBUG.ON).\r\n":
+    L"Boot source accepted. Logging ON (DEBUG.ON found).\r\n");
+  if(EFI_ERROR(status))goto finish;
+#endif
   UINT8 secure=0xff;UINTN size=1;
   stage="secure-boot";
   status=table->RuntimeServices->GetVariable(L"SecureBoot",&GlobalGuid,NULL,&size,&secure);
@@ -286,7 +287,9 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
 #ifdef GC_FULL_FLR
   stage="full-plan-allocation";status=table->BootServices->AllocatePool(EfiLoaderData,sizeof(*approved),(VOID **)&approved);
   if(EFI_ERROR(status) || !approved){status=EFI_OUT_OF_RESOURCES;goto finish;}
+#ifndef GU_SSD_EXPERIMENT
   stage="full-prepare";status=GfPrepare(&context,approved);if(EFI_ERROR(status))goto finish;
+#endif
 #ifdef GC_FULL_UNLOCK
   status=Say(
 #ifdef GC_PRODUCTION
@@ -297,9 +300,21 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
     );
   if(EFI_ERROR(status))goto finish;
   stage="unlock-preflight";status=GxPrepare(&context);if(EFI_ERROR(status))goto finish;
+#ifdef GU_SSD_EXPERIMENT
+  if(!GxAlreadyApplied()){stage="full-prepare";status=GfPrepare(&context,approved);if(EFI_ERROR(status))goto finish;}
+#endif
 #endif
 #ifdef GC_WINDOWS_HANDOFF
   stage="windows-preflight";status=GwPrepare(&context,&windows);if(status!=EFI_SUCCESS)goto finish;
+#endif
+#ifdef GU_SSD_EXPERIMENT
+  if(GxAlreadyApplied()){
+    if(!Log("PATCH_SKIP: SS0=88888888; no assets, detach, firmware, FLR or SetMode\n"))goto stop;
+    status=GxFinish();
+    if(EFI_ERROR(status) || !Log("END: already applied; Windows handoff follows\n"))goto stop;
+    if(EFI_ERROR(Say(L"SS0 already 88888888. Unlock skipped.\r\n")))goto stop;
+    goto handoff;
+  }
 #endif
   stage="start-gate";status=Approve();if(EFI_ERROR(status))goto finish;
   if(!Log(
@@ -396,8 +411,17 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE *table) {
     if(!Log("END: protocol checks complete; visual confirmation pending; power off before any unlock\n"))goto stop;
 #endif
 #ifdef GC_WINDOWS_HANDOFF
+#ifdef GU_SSD_EXPERIMENT
+handoff:
+#endif
     if(EFI_ERROR(Say(Quiet?L"Checks passed. Starting Windows.\r\n":L"REPORT SAVED. Starting Windows without reboot.\r\n")))goto stop;
-    status=GwStart(&context,&windows,&Report,status==EFI_SUCCESS && result.touched && result.restored && GxSafe() && !LogFailed);
+    status=GwStart(&context,&windows,&Report,status==EFI_SUCCESS &&
+#ifdef GU_SSD_EXPERIMENT
+      (GxAlreadyApplied() || (result.touched && result.restored)) &&
+#else
+      result.touched && result.restored &&
+#endif
+      GxSafe() && !LogFailed);
     if(Report)goto stop;
     Say(L"Windows did not take control or returned. Status: ");
     CHAR16 number[]=L"0x0000000000000000\r\n";static const CHAR16 digits[]=L"0123456789abcdef";

@@ -1,5 +1,6 @@
 /* Real unlock file IO with fake firmware; no filesystem or GPU access. */
 #include "../../unlock/app_io.c"
+static EFI_GUID PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID;
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -15,9 +16,12 @@ static EFI_SIMPLE_FILE_SYSTEM_PROTOCOL Fs;
 static EFI_FILE_PROTOCOL DiskRoot,AssetParent,FileRun,FileReport;
 static struct {USB_DEVICE_PATH usb;EFI_DEVICE_PATH_PROTOCOL end;} Path;
 static unsigned Creates,Writes,Flushes,RunQueries;
-static BOOLEAN ShortWrite;
+static BOOLEAN ShortWrite,PartitionPresent;
+static EFI_PARTITION_INFO_PROTOCOL Partition;
 static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *g,VOID **p){
   (void)h;
+  EFI_GUID partGuid=EFI_PARTITION_INFO_PROTOCOL_GUID;
+  if(!memcmp(g,&partGuid,sizeof(*g))){*p=PartitionPresent?&Partition:NULL;return PartitionPresent?EFI_SUCCESS:EFI_UNSUPPORTED;}
   if(!memcmp(g,&LoadedGuid,sizeof(*g)))*p=&Loaded;
   else if(!memcmp(g,&PathGuid,sizeof(*g)))*p=&Path;
   else {assert(!memcmp(g,&FsGuid,sizeof(*g)));*p=&Fs;}
@@ -48,7 +52,9 @@ static void Setup(void){
   DiskRoot.Close=AssetParent.Close=FileRun.Close=FileReport.Close=Close;FileReport.Write=Write;FileReport.Flush=Flush;
   memset(&Path,0,sizeof(Path));Path.usb.Header.Type=MESSAGING_DEVICE_PATH;Path.usb.Header.SubType=MSG_USB_DP;Path.usb.Header.Length[0]=sizeof(Path.usb);
   Path.end.Type=END_DEVICE_PATH_TYPE;Path.end.SubType=END_ENTIRE_DEVICE_PATH_SUBTYPE;Path.end.Length[0]=4;
-  Creates=Writes=Flushes=RunQueries=0;ShortWrite=FALSE;
+  Creates=Writes=Flushes=RunQueries=0;ShortWrite=PartitionPresent=FALSE;
+  memset(&Partition,0,sizeof(Partition));Partition.Revision=EFI_PARTITION_INFO_PROTOCOL_REVISION;
+  Partition.Type=PARTITION_TYPE_GPT;EFI_GUID esp=EFI_PART_TYPE_EFI_SYSTEM_PART_GUID;Partition.Info.Gpt.PartitionTypeGUID=esp;
 }
 int main(void){
   Setup();GuIoSetQuiet(TRUE);assert(GuIoOpen(NULL,&System)==EFI_SUCCESS && GuLogReady() && !Report && !RunQueries && !Creates);
@@ -59,5 +65,15 @@ int main(void){
   Setup();GuIoSetQuiet(FALSE);ShortWrite=TRUE;assert(GuIoOpen(NULL,&System)==EFI_DEVICE_ERROR && !GuLogReady());assert(GuIoClose()==EFI_SUCCESS);
   Setup();GuIoSetQuiet(TRUE);assert(GuIoOpen(NULL,&System)==EFI_SUCCESS);Gu.fault=TRUE;
   assert(GuIoClose()==EFI_ACCESS_DENIED);Gu.fault=FALSE;assert(GuIoClose()==EFI_SUCCESS);
+  Setup();GuIoSetQuiet(TRUE);Path.usb.Header.SubType=MSG_NVME_NAMESPACE_DP;PartitionPresent=TRUE;
+#ifdef GU_SSD_EXPERIMENT
+  assert(GuIoOpen(NULL,&System)==EFI_SUCCESS && !Creates && !Writes);assert(GuIoClose()==EFI_SUCCESS);
+  Partition.Info.Gpt.PartitionTypeGUID.Data1^=1;assert(GuIoOpen(NULL,&System)==EFI_UNSUPPORTED);
+  Setup();Path.usb.Header.SubType=MSG_NVME_NAMESPACE_DP;PartitionPresent=FALSE;assert(GuIoOpen(NULL,&System)==EFI_UNSUPPORTED);
+  Setup();Path.usb.Header.SubType=MSG_NVME_NAMESPACE_DP;PartitionPresent=TRUE;Partition.Type=PARTITION_TYPE_MBR;assert(GuIoOpen(NULL,&System)==EFI_UNSUPPORTED);
+  Setup();Path.usb.Header.SubType=MSG_NVME_NAMESPACE_DP;PartitionPresent=TRUE;Partition.Revision=0;assert(GuIoOpen(NULL,&System)==EFI_UNSUPPORTED);
+#else
+  assert(GuIoOpen(NULL,&System)==EFI_UNSUPPORTED);
+#endif
   puts("PASS quiet asset IO: no RUN/create/write/flush; debug reports retained; asset and containment failures preserved");return 0;
 }

@@ -1,5 +1,6 @@
 /* Include the standalone app to exercise its actual logger and approval gate. */
 #include "app.c"
+static EFI_GUID PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID;
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,7 +92,7 @@ static EFI_LOADED_IMAGE_PROTOCOL LoadedImage;
 static EFI_SIMPLE_FILE_SYSTEM_PROTOCOL Fs;
 static EFI_RUNTIME_SERVICES Runtime;
 static struct {USB_DEVICE_PATH usb;EFI_DEVICE_PATH_PROTOCOL end;} UsbPath;
-static BOOLEAN MissingMarker,DebugMarker;
+static BOOLEAN MissingMarker,DebugMarker,DebugOpenError;
 static EFI_FILE_PROTOCOL DebugFile;
 static UINT8 SecureEnabled;
 static unsigned ReportCloses;
@@ -104,7 +105,13 @@ static EFI_STATUS EFIAPI RootOpen(EFI_FILE_PROTOCOL *root,EFI_FILE_PROTOCOL **fi
 static EFI_STATUS EFIAPI ParentOpen(EFI_FILE_PROTOCOL *parent,EFI_FILE_PROTOCOL **file,CHAR16 *name,UINT64 mode,UINT64 attr){
   assert(parent==&ParentFile);
 #ifdef GC_PRODUCTION
-  if(name[0]=='D'){*file=DebugMarker?&DebugFile:NULL;return DebugMarker?EFI_SUCCESS:EFI_NOT_FOUND;}
+  if(name[0]=='D'){
+    static const CHAR16 expected[]=L"DEBUG.ON";
+    assert(!memcmp(name,expected,sizeof(expected)) && mode==EFI_FILE_MODE_READ && !attr);
+    *file=DebugMarker?&DebugFile:NULL;
+    if(DebugOpenError){*file=NULL;return EFI_DEVICE_ERROR;}
+    return DebugMarker?EFI_SUCCESS:EFI_NOT_FOUND;
+  }
 #else
   (void)name;
 #endif
@@ -141,7 +148,7 @@ static EFI_STATUS EFIAPI TreeOpens(EFI_HANDLE h,EFI_GUID *g,EFI_OPEN_PROTOCOL_IN
 }
 #endif
 static VOID Startup(VOID){
-  Setup();MissingMarker=FALSE;DebugMarker=TRUE;DebugFile.Close=FileClose;ReportCloses=0;SecureEnabled=1;
+  Setup();MissingMarker=DebugOpenError=FALSE;DebugMarker=TRUE;DebugFile.Close=FileClose;ReportCloses=0;SecureEnabled=1;
   memset(&RootFile,0,sizeof(RootFile));memset(&ParentFile,0,sizeof(ParentFile));memset(&RunFile,0,sizeof(RunFile));
   RootFile.Open=RootOpen;ParentFile.Open=ParentOpen;RunFile.Open=RunOpen;ParentFile.GetInfo=Metadata;
   RootFile.Close=ParentFile.Close=RunFile.Close=File.Close=FileClose;
@@ -167,6 +174,8 @@ int main(void){
   Setup();OutputStatus=EFI_DEVICE_ERROR;assert(Approve()==EFI_DEVICE_ERROR && !Polls);
   Startup();Report=NULL;DebugMarker=FALSE;assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_SUCCESS && Quiet && !Report && !Writes);
   assert(Log("quiet\n") && !Writes && !Flushes);
+  Startup();Report=NULL;DebugOpenError=TRUE;
+  assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_DEVICE_ERROR && !Quiet && !Report && !Writes);
   Startup();assert(OpenLog((EFI_HANDLE)(UINTN)77)==EFI_SUCCESS && !Quiet && Report);assert(Log("debug\n") && Writes==1 && Flushes==1);
 #else
   Setup();assert(Approve()==EFI_SUCCESS && Polls==1);

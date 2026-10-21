@@ -1,5 +1,6 @@
-param([switch]$TreeOnly,[switch]$LeafOnly,[switch]$FullFlr,[switch]$FullUnlock,[switch]$WindowsHandoff,[switch]$Production,[string]$Profile='')
+param([switch]$TreeOnly,[switch]$LeafOnly,[switch]$FullFlr,[switch]$FullUnlock,[switch]$WindowsHandoff,[switch]$Production,[switch]$SsdExperiment,[string]$Profile='')
 $ErrorActionPreference = 'Stop'
+if ($SsdExperiment -and (-not $Production -or -not $WindowsHandoff -or -not $FullUnlock)) { throw '-SsdExperiment requires -FullUnlock -WindowsHandoff -Production.' }
 if ($Production -and (-not $FullUnlock -or -not $WindowsHandoff)) { throw '-Production requires -FullUnlock -WindowsHandoff.' }
 if ($WindowsHandoff -and -not $FullUnlock) { throw '-WindowsHandoff requires -FullUnlock.' }
 $selectedModes=0
@@ -29,6 +30,7 @@ try {
     }
     if ($WindowsHandoff) { $sources += 'experiments/gop/windows'; $modeFlags += '-DGC_WINDOWS_HANDOFF' }
     if ($Production) { $modeFlags += '-DGC_PRODUCTION' }
+    if ($SsdExperiment) { $modeFlags += '-DGU_SSD_EXPERIMENT' }
     $objects = @()
     foreach ($source in $sources) {
         $object = 'build/gop-experiment/' + ($source -replace '/', '_') + '.obj'
@@ -54,7 +56,7 @@ try {
         'experiments/gop/test_cycle.c', 'experiments/gop/test_io.c',
         'experiments/gop/test.cmd', 'experiments/gop/README.md', 'unlock/format.h', 'unlock/runtime.h',
         'scripts/build-gop-experiment.ps1', 'scripts/toolchain.ps1', 'scripts/host-env.cmd',
-        'unlock/verify_pe.py'
+        'unlock/verify_pe.py','unlock/boot_source.h'
     ) + @(Get-ChildItem deps/edk2/MdePkg/Include -Recurse -File | ForEach-Object {
         $_.FullName.Substring($root.Length+1).Replace('\','/')
     })
@@ -68,12 +70,13 @@ try {
     }
     if ($WindowsHandoff) { $records += @('experiments/gop/windows.h','experiments/gop/test_windows.c','experiments/gop/test-windows.cmd','experiments/gop/windows-check.ps1','experiments/gop/test-windows-check.ps1','analysis/compute-benchmark.cu','analysis/build-benchmark.cmd','results/benchmark.json') }
     if ($Production) { $records += @('experiments/gop/test-production.cmd','experiments/gop/test_quiet_io.c') }
+    if ($SsdExperiment) { $records += @('experiments/gop/test-ssd.cmd','experiments/gop/test_ssd_flow.c') }
     $records = @($records | Sort-Object -Unique)
     [ordered]@{
-        BuiltUtc=[DateTime]::UtcNow.ToString('o'); HardwareTested=$false; WindowsHandoff=[bool]$WindowsHandoff; Production=[bool]$Production
+        BuiltUtc=[DateTime]::UtcNow.ToString('o'); HardwareTested=$false; WindowsHandoff=[bool]$WindowsHandoff; Production=[bool]$Production; SsdExperiment=[bool]$SsdExperiment
         Mode=$(if ($FullUnlock) {'full-unlock'} elseif ($FullFlr) {'full-flr'} elseif ($LeafOnly) {'leaf-member'} elseif ($TreeOnly) {'tree-read-only'} else {'cycle'})
         EfiSha256=(Get-BuildHash 'build/gop-experiment/BOOTX64.EFI')
         Sources=@($records | ForEach-Object { [ordered]@{Path=$_; Sha256=(Get-BuildHash $_)} })
     } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 build/gop-experiment/build-manifest.json
-    Write-Output $(if ($Production) {'Built v15-auto-windows: automatic verified unlock; no report files unless DEBUG.ON exists; hardware untested.'} elseif ($WindowsHandoff) {'Built v14-windows-handoff: v13 recovery then verified Windows chainload; hardware untested.'} elseif ($FullUnlock) {'Built v13-mode-cycle-readback: alternate/original mode cycle and direct framebuffer verification; hardware untested.'} elseif ($FullFlr) {'Built v8-virtual-gop: full GOP release, one FLR and display restoration; no compute unlock.'} elseif ($LeafOnly) {'Built v5-leaf single text-member Stop/Supported/Start experiment; GPU GOP/EDID untouched by app.'} elseif ($TreeOnly) {'Built v4-tree read-only ownership capture; no detach/reconnect or unlock/FLR core linked.'} else {'Built GOP round-trip experiment. Only driver-model detach/reconnect; no unlock/FLR core linked.'})
+    Write-Output $(if ($SsdExperiment) {'Built v16-ssd-selectors: USB/GPT ESP source, SS0 skip and relaxed initial selectors; hardware untested.'} elseif ($Production) {'Built v15-auto-windows: automatic verified unlock; no report files unless DEBUG.ON exists; hardware untested.'} elseif ($WindowsHandoff) {'Built v14-windows-handoff: v13 recovery then verified Windows chainload; hardware untested.'} elseif ($FullUnlock) {'Built v13-mode-cycle-readback: alternate/original mode cycle and direct framebuffer verification; hardware untested.'} elseif ($FullFlr) {'Built v8-virtual-gop: full GOP release, one FLR and display restoration; no compute unlock.'} elseif ($LeafOnly) {'Built v5-leaf single text-member Stop/Supported/Start experiment; GPU GOP/EDID untouched by app.'} elseif ($TreeOnly) {'Built v4-tree read-only ownership capture; no detach/reconnect or unlock/FLR core linked.'} else {'Built GOP round-trip experiment. Only driver-model detach/reconnect; no unlock/FLR core linked.'})
 } finally { Pop-Location }

@@ -1,11 +1,12 @@
 #include "app_io.h"
 #include "compat/compat.h"
+#include "boot_source.h"
 #include "format.h"
 #include "sha256.h"
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Guid/FileInfo.h>
-static EFI_GUID LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID,PathGuid=EFI_DEVICE_PATH_PROTOCOL_GUID,
+static EFI_GUID LoadedGuid=EFI_LOADED_IMAGE_PROTOCOL_GUID,
   FsGuid=EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID,InfoGuid=EFI_FILE_INFO_ID;
 static EFI_SYSTEM_TABLE *Table;
 static EFI_FILE_PROTOCOL *Root,*Parent,*Run,*Report;
@@ -51,17 +52,7 @@ VOID GuLog(const char *Format,...) {
 }
 BOOLEAN GuLogReady(VOID){return (Quiet || Report) && !LogFault;}
 static BOOLEAN UsbPath(EFI_HANDLE Handle) {
-  EFI_DEVICE_PATH_PROTOCOL *path=NULL;
-  if(EFI_ERROR(Table->BootServices->HandleProtocol(Handle,&PathGuid,(VOID **)&path)) || !path)return FALSE;
-  UINTN total=0;BOOLEAN usb=FALSE;
-  for(UINTN nodes=0;nodes<64 && total+4<=4096;nodes++) {
-    UINTN n=path->Length[0]+((UINTN)path->Length[1]<<8);
-    if(n<4 || n>4096-total)return FALSE;
-    if(path->Type==MESSAGING_DEVICE_PATH && path->SubType==MSG_USB_DP && n==sizeof(USB_DEVICE_PATH))usb=TRUE;
-    if(path->Type==END_DEVICE_PATH_TYPE)return usb && n==4 && path->SubType==END_ENTIRE_DEVICE_PATH_SUBTYPE;
-    total+=n;path=(VOID *)((UINT8 *)path+n);
-  }
-  return FALSE;
+  return GuBootSourceAllowed(Table,Handle);
 }
 static EFI_STATUS Metadata(EFI_FILE_PROTOCOL *File,BOOLEAN Directory,UINTN Expected) {
   union {EFI_FILE_INFO info;UINT8 bytes[512];} data;UINTN n=sizeof(data);

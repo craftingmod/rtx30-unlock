@@ -51,6 +51,10 @@ def package(output, root=ROOT, assets=None):
         if not manifest.get('WindowsHandoff') or mode != 'full-unlock':
             raise ValueError('Production requires Windows handoff and full-unlock')
         required.update({'experiments/gop/test-production.cmd', 'experiments/gop/test_quiet_io.c'})
+    if manifest.get('SsdExperiment'):
+        if not manifest.get('Production') or not manifest.get('WindowsHandoff') or mode != 'full-unlock':
+            raise ValueError('SSD experiment requires production Windows handoff')
+        required.update({'unlock/boot_source.h', 'experiments/gop/test-ssd.cmd', 'experiments/gop/test_ssd_flow.c'})
     if not required.issubset({entry['Path'] for entry in sources}):
         raise ValueError('Incomplete experiment source manifest')
     with tempfile.TemporaryDirectory(prefix='.gop-stage-', dir=output.parent) as temporary:
@@ -65,6 +69,7 @@ def package(output, root=ROOT, assets=None):
         if manifest.get('Production'):
             (marker / 'README.txt').write_text(
                 'Production: automatic unlock and Windows handoff after checks.\n'
+                'The SSD experiment build also accepts GPT EFI System Partitions.\n'
                 'No RUN folders or reports are created by default.\n'
                 'Create an empty DEBUG.ON in this directory to enable detailed reports.\n'
                 'Remove DEBUG.ON after diagnosis to stop log accumulation.\n', encoding='utf-8')
