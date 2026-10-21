@@ -9,6 +9,7 @@ EFI_STATUS ProbeSaveNew(EFI_FILE_PROTOCOL *directory, CHAR16 *name, VOID *data, 
 EFI_STATUS ProbeCaptureProfile(EFI_SYSTEM_TABLE *table, EFI_FILE_PROTOCOL *output,
                                UINT8 bytes[PROBE_PROFILE_BYTES]);
 EFI_STATUS GuProfileCreate(EFI_SYSTEM_TABLE *table, EFI_FILE_PROTOCOL *parent, BOOLEAN debug);
-EFI_STATUS GuProfilePromChanged(EFI_SYSTEM_TABLE *table, EFI_PCI_IO_PROTOCOL *pci, BOOLEAN *changed);
+EFI_STATUS GuProfilePromChanged(EFI_SYSTEM_TABLE *table, EFI_PCI_IO_PROTOCOL *pci,
+                                BOOLEAN *changed);
 EFI_STATUS GuProfileRefresh(EFI_SYSTEM_TABLE *table, EFI_FILE_PROTOCOL *parent, BOOLEAN debug);
 EFI_STATUS GuProfileCommit(EFI_FILE_PROTOCOL *parent);

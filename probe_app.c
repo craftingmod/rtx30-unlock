@@ -21,7 +21,8 @@ static CHAR16 *volatile Banner = L"\r\nRTX 30 read-only diagnostic v1\r\n";
 static VOID Hex(const CHAR8 *Key, UINT64 Value);
 
 static VOID Text(const CHAR8 *S) {
-  while (*S && Used + 1 < sizeof(Log)) Log[Used++] = *S++;
+  while (*S && Used + 1 < sizeof(Log))
+    Log[Used++] = *S++;
   if (*S) LogFull = TRUE;
   Log[Used] = 0;
 }
@@ -29,16 +30,22 @@ static VOID Section(const CHAR8 *Name, UINTN Index) {
   static const CHAR8 Digits[] = "0123456789abcdef";
   CHAR8 Number[5];
   UINTN I;
-  for (I = 0; I < 4; I++) Number[I] = Digits[(Index >> ((3 - I) * 4)) & 15];
+  for (I = 0; I < 4; I++)
+    Number[I] = Digits[(Index >> ((3 - I) * 4)) & 15];
   Number[4] = 0;
-  Text("["); Text(Name); Text(":"); Text(Number); Text("]\r\n");
+  Text("[");
+  Text(Name);
+  Text(":");
+  Text(Number);
+  Text("]\r\n");
 }
 static VOID ConfigDump(const UINT32 *Config) {
   static const CHAR8 Digits[] = "0123456789abcdef";
   UINTN I;
   for (I = 0; I < 64; I++) {
     CHAR8 Key[] = "config_00";
-    Key[7] = Digits[(I * 4) >> 4]; Key[8] = Digits[(I * 4) & 15];
+    Key[7] = Digits[(I * 4) >> 4];
+    Key[8] = Digits[(I * 4) & 15];
     Hex(Key, Config[I]);
   }
 }
@@ -49,16 +56,23 @@ static VOID Hash(const CHAR8 *Key, const VOID *Data, UINTN Size) {
   UINTN I;
   GuSha256(Data, Size, Digest);
   for (I = 0; I < 32; I++) {
-    Value[I * 2] = Digits[Digest[I] >> 4]; Value[I * 2 + 1] = Digits[Digest[I] & 15];
+    Value[I * 2] = Digits[Digest[I] >> 4];
+    Value[I * 2 + 1] = Digits[Digest[I] & 15];
   }
-  Value[64] = 0; Text(Key); Text("="); Text(Value); Text("\r\n");
+  Value[64] = 0;
+  Text(Key);
+  Text("=");
+  Text(Value);
+  Text("\r\n");
 }
 static VOID Hex(const CHAR8 *Key, UINT64 Value) {
   static const CHAR8 Digits[] = "0123456789abcdef";
   INTN I;
-  Text(Key); Text("=0x");
+  Text(Key);
+  Text("=0x");
   for (I = 60; I >= 0; I -= 4) {
-    CHAR8 S[2] = {Digits[(Value >> I) & 15], 0}; Text(S);
+    CHAR8 S[2] = {Digits[(Value >> I) & 15], 0};
+    Text(S);
   }
   Text("\r\n");
 }
@@ -70,8 +84,10 @@ static VOID ShowLog(VOID) {
   UINTN I = 0;
   while (I < Used) {
     UINTN N = 0;
-    while (I < Used && N < 127) Line[N++] = (CHAR16)(UINT8)Log[I++];
-    Line[N] = 0; Say(Line);
+    while (I < Used && N < 127)
+      Line[N++] = (CHAR16)(UINT8)Log[I++];
+    Line[N] = 0;
+    Say(Line);
   }
 }
 
@@ -89,13 +105,15 @@ static BOOLEAN PathHasUsb(EFI_HANDLE Handle, BOOLEAN Record) {
     if (Length < 4 || Length > 4096 - Total) break;
     if (Path->Type == MESSAGING_DEVICE_PATH &&
         (Path->SubType == MSG_USB_DP || Path->SubType == MSG_USB_CLASS_DP ||
-         Path->SubType == MSG_USB_WWID_DP)) Usb = TRUE;
+         Path->SubType == MSG_USB_WWID_DP))
+      Usb = TRUE;
     if (Record) {
       static const CHAR8 Digits[] = "0123456789abcdef";
       Text("path_node=");
       for (I = 0; I < Length; I++) {
         UINT8 B = ((UINT8 *)Path)[I];
-        CHAR8 Pair[3] = {Digits[B >> 4], Digits[B & 15], 0}; Text(Pair);
+        CHAR8 Pair[3] = {Digits[B >> 4], Digits[B & 15], 0};
+        Text(Pair);
       }
       Text("\r\n");
     }
@@ -114,7 +132,10 @@ static EFI_FILE_PROTOCOL *OpenOutput(EFI_HANDLE Image) {
   EFI_FILE_PROTOCOL *Root = NULL, *Parent = NULL, *Run = NULL;
   EFI_STATUS Status;
   UINTN Slot;
-  union { EFI_FILE_INFO Info; UINT8 Bytes[512]; } Metadata;
+  union {
+    EFI_FILE_INFO Info;
+    UINT8 Bytes[512];
+  } Metadata;
   UINTN MetadataSize = sizeof(Metadata);
   Status = St->BootServices->HandleProtocol(Image, &LoadedGuid, (VOID **)&Loaded);
   Hex("loaded_image_status", Status);
@@ -129,8 +150,7 @@ static EFI_FILE_PROTOCOL *OpenOutput(EFI_HANDLE Image) {
   Status = Fs->OpenVolume(Fs, &Root);
   Hex("usb_open_volume_status", Status);
   if (EFI_ERROR(Status) || Root == NULL) return NULL;
-  Status = Root->Open(Root, &Parent, L"\\RTX30-PROBE",
-                      EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);
+  Status = Root->Open(Root, &Parent, L"\\RTX30-PROBE", EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);
   Root->Close(Root);
   Hex("probe_directory_status", Status);
   if (EFI_ERROR(Status) || Parent == NULL) return NULL;
@@ -138,17 +158,25 @@ static EFI_FILE_PROTOCOL *OpenOutput(EFI_HANDLE Image) {
   if (EFI_ERROR(Status) || MetadataSize < SIZE_OF_EFI_FILE_INFO ||
       !(Metadata.Info.Attribute & EFI_FILE_DIRECTORY)) {
     Text("output=disabled: marker is not a verified directory\r\n");
-    Parent->Close(Parent); return NULL;
+    Parent->Close(Parent);
+    return NULL;
   }
   for (Slot = 0; Slot < 100; Slot++) {
     CHAR16 Name[] = L"RUN00";
-    Name[3] = (CHAR16)('0' + Slot / 10); Name[4] = (CHAR16)('0' + Slot % 10);
+    Name[3] = (CHAR16)('0' + Slot / 10);
+    Name[4] = (CHAR16)('0' + Slot % 10);
     Status = Parent->Open(Parent, &Run, Name, EFI_FILE_MODE_READ, 0);
-    if (!EFI_ERROR(Status)) { Run->Close(Run); Run = NULL; continue; }
+    if (!EFI_ERROR(Status)) {
+      Run->Close(Run);
+      Run = NULL;
+      continue;
+    }
     if (Status != EFI_NOT_FOUND) break;
     Status = Parent->Open(Parent, &Run, Name,
-      EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, EFI_FILE_DIRECTORY);
-    Hex("run_directory_status", Status); Hex("run_slot", Slot);
+                          EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE,
+                          EFI_FILE_DIRECTORY);
+    Hex("run_directory_status", Status);
+    Hex("run_slot", Slot);
     if (EFI_ERROR(Status)) Run = NULL;
     break;
   }
@@ -156,8 +184,7 @@ static EFI_FILE_PROTOCOL *OpenOutput(EFI_HANDLE Image) {
   return Run;
 }
 
-EFI_STATUS ProbeSaveNew(EFI_FILE_PROTOCOL *Directory, CHAR16 *Name,
-                       VOID *Data, UINTN Size) {
+EFI_STATUS ProbeSaveNew(EFI_FILE_PROTOCOL *Directory, CHAR16 *Name, VOID *Data, UINTN Size) {
   EFI_FILE_PROTOCOL *File = NULL;
   EFI_STATUS Status;
   if (!Directory || !Directory->Open) return EFI_NOT_FOUND;
@@ -169,7 +196,7 @@ EFI_STATUS ProbeSaveNew(EFI_FILE_PROTOCOL *Directory, CHAR16 *Name,
   }
   if (Status != EFI_NOT_FOUND) return Status;
   Status = Directory->Open(Directory, &File, Name,
-    EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
+                           EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
   if (EFI_ERROR(Status)) return Status;
   return ProbeWriteFile(File, Data, Size);
 }
@@ -179,14 +206,15 @@ EFI_STATUS ProbeWriteFile(EFI_FILE_PROTOCOL *File, VOID *Data, UINTN Size) {
   EFI_STATUS Status;
   if (!File || !File->Close) return EFI_DEVICE_ERROR;
   if (!File->Write || !File->Read || !File->Flush || !File->SetPosition) {
-    File->Close(File); return EFI_UNSUPPORTED;
+    File->Close(File);
+    return EFI_UNSUPPORTED;
   }
   Status = File->Write(File, &Written, Data);
   if (!EFI_ERROR(Status) && Written != Size) Status = EFI_VOLUME_FULL;
   if (!EFI_ERROR(Status)) Status = File->Flush(File);
   if (!EFI_ERROR(Status)) Status = File->SetPosition(File, 0);
   /* Verify persisted evidence as well as the eventual profile before publishing it. */
-  for (UINTN Done = 0; !EFI_ERROR(Status) && Done < Size; ) {
+  for (UINTN Done = 0; !EFI_ERROR(Status) && Done < Size;) {
     UINT8 Buffer[512];
     UINTN Count = Size - Done;
     if (Count > sizeof(Buffer)) Count = sizeof(Buffer);
@@ -198,7 +226,8 @@ EFI_STATUS ProbeWriteFile(EFI_FILE_PROTOCOL *File, VOID *Data, UINTN Size) {
     Done += Count;
   }
   if (!EFI_ERROR(Status)) {
-    UINT8 Extra; UINTN Read = 1;
+    UINT8 Extra;
+    UINTN Read = 1;
     Status = File->Read(File, &Read, &Extra);
     if (!EFI_ERROR(Status) && Read) Status = EFI_COMPROMISED_DATA;
   }
@@ -209,15 +238,16 @@ EFI_STATUS ProbeWriteFile(EFI_FILE_PROTOCOL *File, VOID *Data, UINTN Size) {
 static VOID RecordGop(VOID) {
   EFI_HANDLE *Handles = NULL;
   UINTN Count = 0, I;
-  EFI_STATUS Status = St->BootServices->LocateHandleBuffer(ByProtocol, &GopGuid,
-                                                        NULL, &Count, &Handles);
+  EFI_STATUS Status =
+      St->BootServices->LocateHandleBuffer(ByProtocol, &GopGuid, NULL, &Count, &Handles);
   Hex("gop_enumeration_status", Status);
   if (EFI_ERROR(Status)) return;
   for (I = 0; I < Count; I++) {
     EFI_GRAPHICS_OUTPUT_PROTOCOL *Gop = NULL;
     Status = St->BootServices->HandleProtocol(Handles[I], &GopGuid, (VOID **)&Gop);
     if (EFI_ERROR(Status) || !Gop || !Gop->Mode) continue;
-    Section("GOP", I); Hex("index", I);
+    Section("GOP", I);
+    Hex("index", I);
     Hex("console_handle", Handles[I] == St->ConsoleOutHandle);
     Hex("mode", Gop->Mode->Mode);
     Hex("framebuffer_base", Gop->Mode->FrameBufferBase);
@@ -240,15 +270,19 @@ static BOOLEAN RecordBars(EFI_PCI_IO_PROTOCOL *Pci, UINTN Index) {
     EFI_ACPI_ADDRESS_SPACE_DESCRIPTOR *Descriptor = NULL;
     EFI_STATUS Status = Pci->GetBarAttributes(Pci, (UINT8)Bar, NULL, (VOID **)&Descriptor);
     Section("BAR", Index * 8 + Bar);
-    Hex("pci_index", Index); Hex("bar_index", Bar);
+    Hex("pci_index", Index);
+    Hex("bar_index", Bar);
     if (!EFI_ERROR(Status)) {
       if (!Descriptor || Descriptor->Desc != ACPI_ADDRESS_SPACE_DESCRIPTOR ||
           Descriptor->Len < sizeof(*Descriptor) - 3 || Descriptor->AddrLen == 0)
         Status = EFI_COMPROMISED_DATA;
       else {
-        if (Descriptor->ResType > 2 || Descriptor->AddrRangeMin > MAX_UINT64 - (Descriptor->AddrLen - 1)) Valid = FALSE;
+        if (Descriptor->ResType > 2 ||
+            Descriptor->AddrRangeMin > MAX_UINT64 - (Descriptor->AddrLen - 1))
+          Valid = FALSE;
         Hex("resource_type", Descriptor->ResType);
-        Hex("base", Descriptor->AddrRangeMin); Hex("length", Descriptor->AddrLen);
+        Hex("base", Descriptor->AddrRangeMin);
+        Hex("length", Descriptor->AddrLen);
       }
     }
     Hex("status", Status);
@@ -257,8 +291,8 @@ static BOOLEAN RecordBars(EFI_PCI_IO_PROTOCOL *Pci, UINTN Index) {
   return Valid;
 }
 
-static EFI_STATUS Capture(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table,
-                          EFI_FILE_PROTOCOL *Destination, UINT8 *Profile) {
+static EFI_STATUS Capture(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table, EFI_FILE_PROTOCOL *Destination,
+                          UINT8 *Profile) {
   EFI_BOOT_SERVICES *Bs;
   EFI_HANDLE *Handles = NULL, SelectedHandle = NULL;
   EFI_PCI_IO_PROTOCOL *Selected = NULL;
@@ -271,10 +305,15 @@ static EFI_STATUS Capture(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table,
   EFI_STATUS Evidence = EFI_SUCCESS;
   UINT32 SelectedConfig[64] = {0};
   UINTN SelectedIndex = 0;
-  St = Table; Bs = St->BootServices; Used = 0; Log[0] = 0; LogFull = FALSE;
+  St = Table;
+  Bs = St->BootServices;
+  Used = 0;
+  Log[0] = 0;
+  LogFull = FALSE;
   Say(Banner);
   Say(L"Collects BIOS and preboot state. This does not unlock the GPU.\r\n");
-  Text("[REPORT]\r\n"); Hex("format", 1);
+  Text("[REPORT]\r\n");
+  Hex("format", 1);
   Text("[OUTPUT]\r\n");
   Output = Profile ? Destination : OpenOutput(Image);
   if (Profile && !Output) Text("output=memory-only\r\n");
@@ -287,53 +326,78 @@ static EFI_STATUS Capture(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table,
       UINT32 Config[64];
       UINTN Segment = 0, Bus = 0, Device = 0, Function = 0;
       Status = Bs->HandleProtocol(Handles[I], &PciGuid, (VOID **)&Pci);
-      if (EFI_ERROR(Status) || Pci == NULL) { Evidence = EFI_DEVICE_ERROR; continue; }
+      if (EFI_ERROR(Status) || Pci == NULL) {
+        Evidence = EFI_DEVICE_ERROR;
+        continue;
+      }
       Status = Pci->Pci.Read(Pci, EfiPciIoWidthUint32, 0, 64, Config);
-      if (Status != EFI_SUCCESS) { Evidence = EFI_DEVICE_ERROR; continue; }
+      if (Status != EFI_SUCCESS) {
+        Evidence = EFI_DEVICE_ERROR;
+        continue;
+      }
       if (!ProbeMatches(Config)) continue;
       Section("PCI", Matches);
       Status = Pci->GetLocation(Pci, &Segment, &Bus, &Device, &Function);
-      if (Status != EFI_SUCCESS || Segment > 65535 || Bus > 255 || Device > 31 || Function > 7) Evidence = EFI_UNSUPPORTED;
-      for (UINTN J=0; J<64; J++) SelectedConfig[J]=Config[J];
-      Hex("location_status", Status); Hex("segment", Segment); Hex("bus", Bus);
-      Hex("device", Device); Hex("function", Function);
-      Hex("identity", Config[0]); Hex("class_revision", Config[2]);
+      if (Status != EFI_SUCCESS || Segment > 65535 || Bus > 255 || Device > 31 || Function > 7)
+        Evidence = EFI_UNSUPPORTED;
+      for (UINTN J = 0; J < 64; J++)
+        SelectedConfig[J] = Config[J];
+      Hex("location_status", Status);
+      Hex("segment", Segment);
+      Hex("bus", Bus);
+      Hex("device", Device);
+      Hex("function", Function);
+      Hex("identity", Config[0]);
+      Hex("class_revision", Config[2]);
       Hex("subsystem", Config[11]);
       Hex("detail_supported", ProbeSupportsDetail(Config));
-      ConfigDump(Config); PathHasUsb(Handles[I], TRUE);
+      ConfigDump(Config);
+      PathHasUsb(Handles[I], TRUE);
       if (!RecordBars(Pci, Matches)) Evidence = EFI_COMPROMISED_DATA;
       SelectedIndex = Matches++;
-      Selected = Pci; SelectedHandle = Handles[I];
+      Selected = Pci;
+      SelectedHandle = Handles[I];
     }
   }
   if (Handles && EFI_ERROR(Bs->FreePool(Handles))) Evidence = EFI_DEVICE_ERROR;
-  Text("[SUMMARY]\r\n"); Hex("matching_cards", Matches);
+  Text("[SUMMARY]\r\n");
+  Hex("matching_cards", Matches);
   RecordGop();
   /* Debug captures persist inventory first; quiet profiles retain it only in memory. */
   Status = Profile && !Output ? EFI_SUCCESS : ProbeSaveNew(Output, L"INVENTORY.TXT", Log, Used);
-  Text("[DETAIL]\r\n"); Hex("inventory_save_status", Status);
+  Text("[DETAIL]\r\n");
+  Hex("inventory_save_status", Status);
   if (Matches == 1 && Status == EFI_SUCCESS && !LogFull && (!Profile || !EFI_ERROR(Evidence))) {
     Say(L"One NVIDIA display device found. Checking read-only allowlist...\r\n");
-    Text("[TARGET]\r\n"); Hex("pci_index", SelectedIndex); PathHasUsb(SelectedHandle, TRUE);
+    Text("[TARGET]\r\n");
+    Hex("pci_index", SelectedIndex);
+    PathHasUsb(SelectedHandle, TRUE);
     Status = ProbeCollect(Selected, Bs, &Result);
     Hex("collect_status", Status);
     if (!EFI_ERROR(Status)) {
-      for (UINTN J=0; J<64; J++) if (Result.Config[J]!=SelectedConfig[J]) Evidence=EFI_COMPROMISED_DATA;
-      Hex("identity", Result.Config[0]); Hex("subsystem", Result.Config[11]);
-      Hex("bar0_status", Result.BarStatus); Hex("bar0_length", Result.BarSize);
+      for (UINTN J = 0; J < 64; J++)
+        if (Result.Config[J] != SelectedConfig[J]) Evidence = EFI_COMPROMISED_DATA;
+      Hex("identity", Result.Config[0]);
+      Hex("subsystem", Result.Config[11]);
+      Hex("bar0_status", Result.BarStatus);
+      Hex("bar0_length", Result.BarSize);
       Hex("bar0_base", Result.BarBase);
       Hex("memory_decode_enabled", Result.MemoryEnabled);
       for (I = 0; I < PROBE_SAMPLE_COUNT; I++) {
         PROBE_SAMPLE *Sample = &Result.Samples[I];
         Section("REG", I);
-        Hex("register", Sample->Offset); Hex("status", Sample->Status); Hex("value", Sample->Value);
+        Hex("register", Sample->Offset);
+        Hex("status", Sample->Status);
+        Hex("value", Sample->Value);
       }
       Text("[DUMPS]\r\n");
       Hex("rom_image_size", Selected->RomSize);
       if (Output && ProbeRomUsable(Selected->RomImage, Selected->RomSize)) {
-        Status = ProbeSaveNew(Output, L"ROMIMAGE.BIN", Selected->RomImage, (UINTN)Selected->RomSize);
+        Status =
+            ProbeSaveNew(Output, L"ROMIMAGE.BIN", Selected->RomImage, (UINTN)Selected->RomSize);
         Hex("rom_image_save_status", Status);
-      } else Text("rom_image=not saved (no writable USB or missing/invalid firmware ROM copy)\r\n");
+      } else
+        Text("rom_image=not saved (no writable USB or missing/invalid firmware ROM copy)\r\n");
       if ((Output || Profile) && Result.MemoryEnabled && !EFI_ERROR(Result.BarStatus) &&
           Result.BarSize >= PROBE_PROM_OFFSET + PROBE_PROM_SIZE) {
         VOID *Prom = NULL;
@@ -347,10 +411,12 @@ static EFI_STATUS Capture(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table,
             GuSha256(Prom, PROBE_PROM_SIZE, PromHash);
             Hash("prom_sha256", Prom, PROBE_PROM_SIZE);
             Hex("prom_size", PROBE_PROM_SIZE);
-            Status = Output ? ProbeSaveNew(Output, L"PROM.BIN", Prom, PROBE_PROM_SIZE) : EFI_SUCCESS;
+            Status =
+                Output ? ProbeSaveNew(Output, L"PROM.BIN", Prom, PROBE_PROM_SIZE) : EFI_SUCCESS;
             Hex("prom_save_status", Status);
             PromSaved = Status == EFI_SUCCESS;
-          } else Text("prom=not saved (read error or no 55aa ROM signature)\r\n");
+          } else
+            Text("prom=not saved (read error or no 55aa ROM signature)\r\n");
           if (EFI_ERROR(Bs->FreePool(Prom))) Evidence = EFI_DEVICE_ERROR;
         }
       }
@@ -360,19 +426,24 @@ static EFI_STATUS Capture(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table,
     Say(L"Detail reads skipped: target ambiguous/missing or log unavailable.\r\n");
   }
   Text("[END]\r\ngpu_writes=none\r\ngpu_resets=none\r\nboot_variable_changes=none\r\n");
-  Status = LogFull ? EFI_BUFFER_TOO_SMALL : Profile && !Output ? EFI_SUCCESS : ProbeSaveNew(Output, L"REPORT.TXT", Log, Used);
+  Status = LogFull              ? EFI_BUFFER_TOO_SMALL
+           : Profile && !Output ? EFI_SUCCESS
+                                : ProbeSaveNew(Output, L"REPORT.TXT", Log, Used);
   if (Profile) {
     if (EFI_ERROR(Status)) return Status;
     if (EFI_ERROR(Evidence)) return Evidence;
     if (Matches != 1 || !PromSaved) return EFI_NOT_READY;
     GuSha256(Log, Used, ReportHash);
-    return ProbeEncodeProfile(&Result, PromHash, ReportHash, Profile) ? EFI_SUCCESS : EFI_UNSUPPORTED;
+    return ProbeEncodeProfile(&Result, PromHash, ReportHash, Profile) ? EFI_SUCCESS
+                                                                      : EFI_UNSUPPORTED;
   }
   if (Output) Output->Close(Output);
   if (EFI_ERROR(Status)) {
     Say(L"Could not save report. Diagnostic details follow:\r\n");
-    Hex("report_save_status", Status); ShowLog();
-  } else Say(L"Saved: USB \\RTX30-PROBE\\RUNxx\\REPORT.TXT and available BIOS copies.\r\n");
+    Hex("report_save_status", Status);
+    ShowLog();
+  } else
+    Say(L"Saved: USB \\RTX30-PROBE\\RUNxx\\REPORT.TXT and available BIOS copies.\r\n");
   Say(L"Returning in 15 seconds. Choose Windows Boot Manager if a boot menu appears.\r\n");
   Bs->Stall(15000000);
   return EFI_SUCCESS;

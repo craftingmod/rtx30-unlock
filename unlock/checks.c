@@ -8,20 +8,23 @@
 #define GU_MSIX_ID 0x11U
 
 BOOLEAN GuIndependentDisplay(EFI_BOOT_SERVICES *Bs, EFI_PCI_IO_PROTOCOL *Target,
-                            EFI_HANDLE TargetHandle, EFI_DEVICE_PATH_PROTOCOL *Path) {
-  EFI_GUID Guid=EFI_PCI_IO_PROTOCOL_GUID;
-  EFI_HANDLE Handle=NULL;EFI_PCI_IO_PROTOCOL *Pci=NULL;
-  EFI_DEVICE_PATH_PROTOCOL *Remaining=Path;
-  UINT32 Config[3];UINTN Segment,Bus,Device,Function,Ts,Tb,Td,Tf;
-  if(!Bs || !Target || !Path || !Bs->LocateDevicePath ||
-     EFI_ERROR(Bs->LocateDevicePath(&Guid,&Remaining,&Handle)) || !Handle || Handle==TargetHandle ||
-     EFI_ERROR(Bs->HandleProtocol(Handle,&Guid,(VOID **)&Pci)) || !Pci || Pci==Target ||
-     EFI_ERROR(Pci->Pci.Read(Pci,EfiPciIoWidthUint32,0,3,Config)) ||
-     (Config[2]>>24)!=3 || !(Config[0]&0xffffU) || (Config[0]&0xffffU)==0xffffU ||
-     EFI_ERROR(Pci->GetLocation(Pci,&Segment,&Bus,&Device,&Function)) ||
-     EFI_ERROR(Target->GetLocation(Target,&Ts,&Tb,&Td,&Tf)))return FALSE;
-  return Segment<=65535 && Bus<=255 && Device<=31 && Function<=7 &&
-         (Segment!=Ts || Bus!=Tb || Device!=Td || Function!=Tf);
+                             EFI_HANDLE TargetHandle, EFI_DEVICE_PATH_PROTOCOL *Path) {
+  EFI_GUID Guid = EFI_PCI_IO_PROTOCOL_GUID;
+  EFI_HANDLE Handle = NULL;
+  EFI_PCI_IO_PROTOCOL *Pci = NULL;
+  EFI_DEVICE_PATH_PROTOCOL *Remaining = Path;
+  UINT32 Config[3];
+  UINTN Segment, Bus, Device, Function, Ts, Tb, Td, Tf;
+  if (!Bs || !Target || !Path || !Bs->LocateDevicePath ||
+      EFI_ERROR(Bs->LocateDevicePath(&Guid, &Remaining, &Handle)) || !Handle ||
+      Handle == TargetHandle || EFI_ERROR(Bs->HandleProtocol(Handle, &Guid, (VOID **)&Pci)) ||
+      !Pci || Pci == Target || EFI_ERROR(Pci->Pci.Read(Pci, EfiPciIoWidthUint32, 0, 3, Config)) ||
+      (Config[2] >> 24) != 3 || !(Config[0] & 0xffffU) || (Config[0] & 0xffffU) == 0xffffU ||
+      EFI_ERROR(Pci->GetLocation(Pci, &Segment, &Bus, &Device, &Function)) ||
+      EFI_ERROR(Target->GetLocation(Target, &Ts, &Tb, &Td, &Tf)))
+    return FALSE;
+  return Segment <= 65535 && Bus <= 255 && Device <= 31 && Function <= 7 &&
+         (Segment != Ts || Bus != Tb || Device != Td || Function != Tf);
 }
 
 static UINT8 ConfigByte(const UINT32 Config[64], UINTN Offset) {
@@ -29,12 +32,11 @@ static UINT8 ConfigByte(const UINT32 Config[64], UINTN Offset) {
 }
 
 static UINT16 ConfigWord(const UINT32 Config[64], UINTN Offset) {
-  return (UINT16)(ConfigByte(Config, Offset) |
-                  ((UINT16)ConfigByte(Config, Offset + 1U) << 8U));
+  return (UINT16)(ConfigByte(Config, Offset) | ((UINT16)ConfigByte(Config, Offset + 1U) << 8U));
 }
 
-BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
-                      UINTN Device, UINTN Function, GU_CAPS *Out) {
+BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus, UINTN Device,
+                      UINTN Function, GU_CAPS *Out) {
   GU_CAPS Caps = {0, 0, 0, 0, 0};
   UINT8 Occupied[GU_CONFIG_BYTES - GU_CAP_START] = {0};
   UINT64 Seen = 0;
@@ -43,9 +45,9 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
 
   if (Out == NULL) return FALSE;
   *Out = Caps;
-  if (Config == NULL || (GU_PROFILE_BUILD ?
-      Segment > 65535 || Bus > 255 || Device > 31 || Function > 7 :
-      Segment != 0 || Bus != 1 || Device != 0 || Function != 0))
+  if (Config == NULL ||
+      (GU_PROFILE_BUILD ? Segment > 65535 || Bus > 255 || Device > 31 || Function > 7
+                        : Segment != 0 || Bus != 1 || Device != 0 || Function != 0))
     return FALSE;
   if (Config[0] != GU_BOARD_ID || Config[0x2c / 4] != GU_BOARD_SUBSYSTEM ||
       ConfigByte(Config, 0x0b) != PCI_CLASS_DISPLAY ||
@@ -76,35 +78,34 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
     Next = ConfigByte(Config, Pointer + 1U);
     Control = ConfigWord(Config, Pointer + 2U);
     switch (Id) {
-      case EFI_PCI_CAPABILITY_ID_PMI:
-        if (Caps.pm != 0 || (Control & 7U) == 0 || (Control & 7U) > 3)
-          return FALSE;
-        Length = 8;
-        break;
-      case EFI_PCI_CAPABILITY_ID_MSI:
-        if (Caps.msi != 0 || (Control & 1U) != 0) return FALSE;
-        /* Mask-capable layouts include two reserved bytes after Message Data. */
-        Length = (Control & 0x80U) != 0 ? 14U : 10U;
-        if ((Control & 0x100U) != 0) Length += 10U;
-        break;
-      case PCI_EXPRESS_CAPABILITY_ID:
-        if (Caps.pcie != 0 || (Control & 0x0fU) < 1 ||
-            (Control & 0x0fU) > 2 || ((Control >> 4U) & 0x0fU) > 1)
-          return FALSE;
-        /* Endpoint v1 reaches Link Status; reserve the entire v2 layout. */
-        Length = (Control & 0x0fU) == 1 ? 0x14U : 0x3cU;
-        break;
-      case GU_MSIX_ID:
-        if (Caps.msix != 0 || (Control & 0x8000U) != 0) return FALSE;
-        Length = 12;
-        break;
-      case EFI_PCI_CAPABILITY_ID_VENDOR:
-        Length = Control & 0xffU;
-        if (Length < 3) return FALSE;
-        break;
-      default:
-        /* A format we do not understand cannot be checked for overlap/length. */
+    case EFI_PCI_CAPABILITY_ID_PMI:
+      if (Caps.pm != 0 || (Control & 7U) == 0 || (Control & 7U) > 3) return FALSE;
+      Length = 8;
+      break;
+    case EFI_PCI_CAPABILITY_ID_MSI:
+      if (Caps.msi != 0 || (Control & 1U) != 0) return FALSE;
+      /* Mask-capable layouts include two reserved bytes after Message Data. */
+      Length = (Control & 0x80U) != 0 ? 14U : 10U;
+      if ((Control & 0x100U) != 0) Length += 10U;
+      break;
+    case PCI_EXPRESS_CAPABILITY_ID:
+      if (Caps.pcie != 0 || (Control & 0x0fU) < 1 || (Control & 0x0fU) > 2 ||
+          ((Control >> 4U) & 0x0fU) > 1)
         return FALSE;
+      /* Endpoint v1 reaches Link Status; reserve the entire v2 layout. */
+      Length = (Control & 0x0fU) == 1 ? 0x14U : 0x3cU;
+      break;
+    case GU_MSIX_ID:
+      if (Caps.msix != 0 || (Control & 0x8000U) != 0) return FALSE;
+      Length = 12;
+      break;
+    case EFI_PCI_CAPABILITY_ID_VENDOR:
+      Length = Control & 0xffU;
+      if (Length < 3) return FALSE;
+      break;
+    default:
+      /* A format we do not understand cannot be checked for overlap/length. */
+      return FALSE;
     }
 
     if (Length > GU_CONFIG_BYTES - Pointer) return FALSE;
@@ -114,26 +115,25 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
     }
 
     switch (Id) {
-      case EFI_PCI_CAPABILITY_ID_PMI:
-        if ((ConfigWord(Config, Pointer + 4U) & 3U) != PCI_POWER_STATE_D0)
-          return FALSE;
-        Caps.pm = (UINT16)Pointer;
-        break;
-      case EFI_PCI_CAPABILITY_ID_MSI:
-        Caps.msi = (UINT16)Pointer;
-        break;
-      case PCI_EXPRESS_CAPABILITY_ID:
-        if ((Config[(Pointer + 4U) / 4U] & (1U << 28U)) == 0 ||
-            (ConfigWord(Config, Pointer + 8U) & 0x8000U) != 0)
-          return FALSE;
-        Caps.pcie = (UINT16)Pointer;
-        Caps.pcie_version = (UINT8)(Control & 0x0fU);
-        break;
-      case GU_MSIX_ID:
-        Caps.msix = (UINT16)Pointer;
-        break;
-      default:
-        break;
+    case EFI_PCI_CAPABILITY_ID_PMI:
+      if ((ConfigWord(Config, Pointer + 4U) & 3U) != PCI_POWER_STATE_D0) return FALSE;
+      Caps.pm = (UINT16)Pointer;
+      break;
+    case EFI_PCI_CAPABILITY_ID_MSI:
+      Caps.msi = (UINT16)Pointer;
+      break;
+    case PCI_EXPRESS_CAPABILITY_ID:
+      if ((Config[(Pointer + 4U) / 4U] & (1U << 28U)) == 0 ||
+          (ConfigWord(Config, Pointer + 8U) & 0x8000U) != 0)
+        return FALSE;
+      Caps.pcie = (UINT16)Pointer;
+      Caps.pcie_version = (UINT8)(Control & 0x0fU);
+      break;
+    case GU_MSIX_ID:
+      Caps.msix = (UINT16)Pointer;
+      break;
+    default:
+      break;
     }
     Pointer = Next;
   }
@@ -142,9 +142,7 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
   return TRUE;
 }
 
-static UINT16 Read16(const UINT8 *Bytes) {
-  return (UINT16)(Bytes[0] | ((UINT16)Bytes[1] << 8U));
-}
+static UINT16 Read16(const UINT8 *Bytes) { return (UINT16)(Bytes[0] | ((UINT16)Bytes[1] << 8U)); }
 
 static UINT32 Read32(const UINT8 *Bytes) {
   return (UINT32)Read16(Bytes) | ((UINT32)Read16(Bytes + 2) << 16U);
@@ -160,9 +158,8 @@ static UINT16 NodeLength(const UINT8 *Bytes, UINTN Remaining) {
 
 static BOOLEAN TakePci(const UINT8 **Bytes, UINTN *Remaining, UINT8 Device) {
   const UINT8 *Node = *Bytes;
-  if (NodeLength(Node, *Remaining) != sizeof(PCI_DEVICE_PATH) ||
-      Node[0] != HARDWARE_DEVICE_PATH || Node[1] != HW_PCI_DP ||
-      Node[4] != 0 || Node[5] != Device)
+  if (NodeLength(Node, *Remaining) != sizeof(PCI_DEVICE_PATH) || Node[0] != HARDWARE_DEVICE_PATH ||
+      Node[1] != HW_PCI_DP || Node[4] != 0 || Node[5] != Device)
     return FALSE;
   *Bytes += sizeof(PCI_DEVICE_PATH);
   *Remaining -= sizeof(PCI_DEVICE_PATH);
@@ -177,8 +174,7 @@ int GuDisplayPath(const EFI_DEVICE_PATH_PROTOCOL *Path, UINTN MaxBytes) {
       Bytes[0] != ACPI_DEVICE_PATH || Bytes[1] != ACPI_DP)
     return 0;
   Hid = Read32(Bytes + 4);
-  if ((Hid != EISA_PNP_ID(0x0a03) && Hid != EISA_PNP_ID(0x0a08)) ||
-      Read32(Bytes + 8) != 0)
+  if ((Hid != EISA_PNP_ID(0x0a03) && Hid != EISA_PNP_ID(0x0a08)) || Read32(Bytes + 8) != 0)
     return 0;
   Bytes += sizeof(ACPI_HID_DEVICE_PATH);
   MaxBytes -= sizeof(ACPI_HID_DEVICE_PATH);
@@ -194,8 +190,7 @@ int GuDisplayPath(const EFI_DEVICE_PATH_PROTOCOL *Path, UINTN MaxBytes) {
     UINT16 Length = NodeLength(Bytes, MaxBytes);
     if (Length == 0) return 0;
     if (Bytes[0] == END_DEVICE_PATH_TYPE) {
-      if (Bytes[1] != END_ENTIRE_DEVICE_PATH_SUBTYPE ||
-          Length != sizeof(EFI_DEVICE_PATH_PROTOCOL))
+      if (Bytes[1] != END_ENTIRE_DEVICE_PATH_SUBTYPE || Length != sizeof(EFI_DEVICE_PATH_PROTOCOL))
         return 0;
       return Route;
     }

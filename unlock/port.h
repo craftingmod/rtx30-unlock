@@ -55,7 +55,8 @@ typedef struct {
 extern GU_PLATFORM Gu;
 
 VOID GuInit(EFI_BOOT_SERVICES *Bs, EFI_PCI_IO_PROTOCOL *Pci);
-BOOLEAN GuTargetConfig(const UINT32 *Config, UINTN Segment, UINTN Bus, UINTN Device, UINTN Function);
+BOOLEAN GuTargetConfig(const UINT32 *Config, UINTN Segment, UINTN Bus, UINTN Device,
+                       UINTN Function);
 BOOLEAN GuSafeToReturn(VOID);
 EFI_STATUS GuDmaAllocate(UINTN Bytes, VOID **Cpu, UINT64 *Dma);
 EFI_STATUS GuDmaFree(VOID *Cpu, UINT64 Dma);

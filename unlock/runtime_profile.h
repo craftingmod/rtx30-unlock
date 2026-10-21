@@ -29,6 +29,8 @@ EFI_STATUS GuProfileLoad(EFI_FILE_PROTOCOL *directory);
 #define GU_BAR_SIZE (GuProfile.bar_size)
 #define GU_PROM_SHA256 (GuProfile.prom_sha256)
 #define GU_TARGET_PCI_ID GU_BOARD_ID
-#define GU_LAYOUT_OFFSETS {0x625f04U,0x1fa7c8U,0x1fa82cU,0x1fa830U,0x1fa824U,0x1fa828U}
-#define GU_LAYOUT_VALUES {GuProfile.layout[0],GuProfile.layout[1],GuProfile.layout[2],GuProfile.layout[3],GuProfile.layout[4],GuProfile.layout[5]}
+#define GU_LAYOUT_OFFSETS {0x625f04U, 0x1fa7c8U, 0x1fa82cU, 0x1fa830U, 0x1fa824U, 0x1fa828U}
+#define GU_LAYOUT_VALUES                                                                           \
+  {GuProfile.layout[0], GuProfile.layout[1], GuProfile.layout[2],                                  \
+   GuProfile.layout[3], GuProfile.layout[4], GuProfile.layout[5]}
 #endif

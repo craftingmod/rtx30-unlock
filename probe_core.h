@@ -25,8 +25,7 @@ typedef struct {
 
 BOOLEAN ProbeMatches(const UINT32 *Config);
 BOOLEAN ProbeSupportsDetail(const UINT32 *Config);
-EFI_STATUS ProbeCollect(EFI_PCI_IO_PROTOCOL *Pci, EFI_BOOT_SERVICES *Bs,
-                       PROBE_RESULT *Result);
-EFI_STATUS ProbeReadProm(EFI_PCI_IO_PROTOCOL *Pci, const PROBE_RESULT *Result,
-                        VOID *Buffer, UINTN Size);
+EFI_STATUS ProbeCollect(EFI_PCI_IO_PROTOCOL *Pci, EFI_BOOT_SERVICES *Bs, PROBE_RESULT *Result);
+EFI_STATUS ProbeReadProm(EFI_PCI_IO_PROTOCOL *Pci, const PROBE_RESULT *Result, VOID *Buffer,
+                         UINTN Size);
 BOOLEAN ProbeRomUsable(const VOID *Buffer, UINT64 Size);

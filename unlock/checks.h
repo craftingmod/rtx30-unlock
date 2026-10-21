@@ -8,8 +8,8 @@ typedef struct {
 } GU_CAPS;
 
 /* Config is a complete, CPU-owned 256-byte snapshot. Out is cleared on failure. */
-BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
-                      UINTN Device, UINTN Function, GU_CAPS *Out);
+BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus, UINTN Device,
+                      UINTN Function, GU_CAPS *Out);
 
 /* Path must point to readable memory through its terminator, up to MaxBytes.
    MaxBytes is a read bound, not necessarily the exact allocation length.
@@ -18,4 +18,4 @@ int GuDisplayPath(const EFI_DEVICE_PATH_PROTOCOL *Path, UINTN MaxBytes);
 
 /* Resolve GOP ownership to a distinct live PCI display function. No writes. */
 BOOLEAN GuIndependentDisplay(EFI_BOOT_SERVICES *Bs, EFI_PCI_IO_PROTOCOL *Target,
-                            EFI_HANDLE TargetHandle, EFI_DEVICE_PATH_PROTOCOL *Path);
+                             EFI_HANDLE TargetHandle, EFI_DEVICE_PATH_PROTOCOL *Path);
