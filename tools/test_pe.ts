@@ -15,7 +15,8 @@ function runVerifier(path: string) {
     encoding: "utf8",
   })
   if (result.error) throw result.error
-  if (result.status === null) throw new Error("PE verifier did not exit normally")
+  if (result.status === null)
+    throw new Error("PE verifier did not exit normally")
   return result
 }
 
@@ -36,7 +37,9 @@ try {
     writeFileSync(path, changed)
     const result = runVerifier(path)
     if (result.status === 0 || !result.stderr.includes(message)) {
-      throw new Error(`PE verifier did not reject malformed ${name}: ${result.stderr}`)
+      throw new Error(
+        `PE verifier did not reject malformed ${name}: ${result.stderr}`,
+      )
     }
     console.log(`PE verifier rejects malformed ${name}: PASS`)
   }

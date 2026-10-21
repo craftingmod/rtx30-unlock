@@ -4,7 +4,7 @@ RTX 30 Series SS0 unlocker for windows by UEFI.
 
 ## How to use
 
-TODO edit
+1. Download compile EFI binary 
 
 ## Checked environment
 * Colorful RTX 3090 ti: PCI `10DE:2203`, subsystem `7377:2000`, VBIOS `94.02.A0.00.08`

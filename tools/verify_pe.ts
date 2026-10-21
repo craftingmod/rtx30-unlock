@@ -59,7 +59,10 @@ export async function inspectPe(
   requirePe(entry !== 0, "entry point missing")
   requireRange(data, optional + 24, 8)
   requirePe(data.readBigUInt64LE(optional + 24) === 0n, "expected image base 0")
-  requirePe((u16(data, optional + 70) & 0x140) === 0x140, "ASLR and NX flags required")
+  requirePe(
+    (u16(data, optional + 70) & 0x140) === 0x140,
+    "ASLR and NX flags required",
+  )
   requirePe(u32(data, optional + 108) >= 16, "data directory missing")
 
   for (const [index, name] of [
@@ -68,7 +71,10 @@ export async function inspectPe(
     [13, "delay imports"],
   ] as const) {
     const directory = optional + 112 + 8 * index
-    requirePe(u32(data, directory) === 0 && u32(data, directory + 4) === 0, name)
+    requirePe(
+      u32(data, directory) === 0 && u32(data, directory + 4) === 0,
+      name,
+    )
   }
   requirePe(u32(data, optional + 112 + 8 * 5 + 4) !== 0, "relocations missing")
 
@@ -85,7 +91,8 @@ export async function inspectPe(
   requirePe(executableEntry, "entry must be in executable section")
 
   const map = await readFile(mapPath, "utf8")
-  const found = /^\s*[0-9A-Fa-f]+:[0-9A-Fa-f]+\s+efi_main\s+([0-9A-Fa-f]+)/m.exec(map)
+  const found =
+    /^\s*[0-9A-Fa-f]+:[0-9A-Fa-f]+\s+efi_main\s+([0-9A-Fa-f]+)/m.exec(map)
   requirePe(
     found !== null && Number.parseInt(found[1], 16) === entry,
     "entry does not match efi_main map symbol",
@@ -115,7 +122,9 @@ async function main() {
     options.length > 2 ||
     (options.length > 0 && (options.length !== 2 || options[0] !== "--output"))
   ) {
-    throw new Error("Usage: bun tools/verify_pe.ts <efi> <map> [--output <json>]")
+    throw new Error(
+      "Usage: bun tools/verify_pe.ts <efi> <map> [--output <json>]",
+    )
   }
 
   const result = await inspectPe(efiPath, mapPath)

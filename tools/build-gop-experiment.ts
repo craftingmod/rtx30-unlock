@@ -43,9 +43,7 @@ async function filesUnder(directory: string): Promise<string[]> {
 }
 
 async function sha256(path: string) {
-  const data = new Uint8Array(
-    await Bun.file(resolve(root, path)).arrayBuffer()
-  )
+  const data = new Uint8Array(await Bun.file(resolve(root, path)).arrayBuffer())
   return createHash("sha256").update(data).digest("hex").toUpperCase()
 }
 
