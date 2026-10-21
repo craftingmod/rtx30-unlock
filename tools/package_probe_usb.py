@@ -4,11 +4,10 @@ import json
 from pathlib import Path
 import shutil
 import tempfile
-import sys
+
+from pe_verification import verify_pe
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'unlock'))
-from verify_pe import inspect
 
 
 def package(output, root=ROOT):
@@ -16,7 +15,7 @@ def package(output, root=ROOT):
     if output.exists() or output.is_symlink() or not output.parent.is_dir():
         raise ValueError('Choose a new output folder in an existing parent')
     build = root / 'build/probe'
-    verified = inspect(build / 'BOOTX64.EFI', build / 'BOOTX64.map')
+    verified = verify_pe(build / 'BOOTX64.EFI', build / 'BOOTX64.map', root)
     recorded = json.loads((build / 'pe-verification.json').read_text(encoding='utf-8'))
     if verified != recorded:
         raise ValueError('Probe differs from its build verification; rebuild first')
@@ -26,7 +25,7 @@ def package(output, root=ROOT):
         boot.mkdir(parents=True)
         (stage / 'RTX30-PROBE').mkdir()
         shutil.copyfile(build / 'BOOTX64.EFI', boot / 'BOOTX64.EFI')
-        if inspect(boot / 'BOOTX64.EFI', build / 'BOOTX64.map') != verified:
+        if verify_pe(boot / 'BOOTX64.EFI', build / 'BOOTX64.map', root) != verified:
             raise ValueError('Probe changed during packaging; rebuild first')
         for name in ('LICENSE', 'THIRD_PARTY_NOTICES.md'):
             shutil.copyfile(root / name, stage / name)

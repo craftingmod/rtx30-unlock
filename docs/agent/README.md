@@ -95,17 +95,11 @@ bun run build
 # build/efi/BOOTX64.EFI
 ```
 
-LLVM의 `clang`·`lld-link`와 Python 3.9 이상이 필요합니다. LLVM 도구는 `PATH` 또는 `LLVM_BIN`에서 찾습니다. 빌드 후 기존 Python PE 검증을 실행하며, 같은 폴더에 링크 맵과 `pe-verification.json`을 저장합니다. ZIP·USB 패키지는 생성하지 않습니다. EFI 실행에는 기존 `RTX-UNLOCK/ASSETS`의 자산 5개가 필요하며, v20의 실제 하드웨어 부팅은 미검증입니다.
+LLVM의 `clang`·`lld-link`가 필요하며, LLVM 도구는 `PATH` 또는 `LLVM_BIN`에서 찾습니다. 빌드 후 Bun PE 검증을 실행하며, 같은 폴더에 링크 맵과 `pe-verification.json`을 저장합니다. ZIP·USB 패키지는 생성하지 않습니다. EFI 실행에는 기존 `RTX-UNLOCK/ASSETS`의 자산 5개가 필요하며, v20의 실제 하드웨어 부팅은 미검증입니다.
 
 펌웨어 자산은 `bun run firmware:assets`로 내려받아 `build/firmware-assets`에 생성할 수 있습니다. EFI 패키징은 별도 단계입니다. 자세한 내용은 [`tools/firmware/README.md`](tools/firmware/README.md)를 참고하세요.
 
-기존 기본 Unlock 빌드는 다음 PowerShell 명령으로 실행할 수 있습니다. 위 v20 통합 EFI와는 다른 빌드입니다. 전체 모의 검사는 `bun run test`로 실행합니다.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\unlock\build.ps1
-```
-
-빌드는 `unlock/build/BOOTX64.EFI`를 만들고 PE 형식을 검사합니다. 검사 명령은 GPU를 실행하지 않습니다. 추가 fixture를 사용하는 전체 모의 검사와 패키지 생성 방법은 [TESTING.md](TESTING.md)를 참고하세요.
+전체 모의 검사는 `bun run test`로 실행합니다. 추가 fixture를 사용하는 검사 방법은 [TESTING.md](TESTING.md)를 참고하세요.
 
 ## 출처와 라이선스
 

@@ -1,3 +1,0 @@
-## Captures
-
-Place Probe result

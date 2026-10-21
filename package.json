@@ -1,6 +1,5 @@
 {
   "name": "rtx30-unlock",
-  "module": "index.ts",
   "type": "module",
   "private": true,
   "scripts": {
@@ -21,6 +20,7 @@
     "typescript": "^7"
   },
   "dependencies": {
+    "adm-zip": "^0.6.1",
     "xz-compat": "^1.2.11"
   }
 }

@@ -16,11 +16,10 @@ TODO edit
 ### Requirements
 
 - Bun
-- Python 3.9+ available as `python`
 - LLVM with `clang` and `lld-link`; add its `bin` directory to `PATH` or set `LLVM_BIN` to that directory
 - The EDK2 MdePkg headers under `deps/edk2/MdePkg/Include` (included in this repository)
 
-PowerShell is only needed for the `.ps1` build workflows; `bun run build` does not require it.
+Python 3.9+ is used by the existing test and packaging utilities, not by `bun run build`.
 
 ```sh
 bun install

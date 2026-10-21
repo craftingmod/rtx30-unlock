@@ -12,11 +12,9 @@ const toolOptions = process.env.LLVM_BIN
   : undefined
 const clang = Bun.which("clang", toolOptions)
 const linker = Bun.which("lld-link", toolOptions)
-const python = Bun.which("python")
 if (!clang || !linker) {
   throw new Error("Install clang and lld-link and set PATH or LLVM_BIN.")
 }
-if (!python) throw new Error("Install Python 3.9+ and add it to PATH.")
 
 // Match the final FullUnlock/WindowsHandoff/Production/Ssd/External/Auto build.
 const sources = [
@@ -89,7 +87,7 @@ for (const source of sources) {
 await $`${linker} /nologo /nodefaultlib /subsystem:efi_application /entry:efi_main /machine:x64 /base:0 /dynamicbase /nxcompat /timestamp:0 /opt:ref /opt:icf ${"/map:" + output + "/BOOTX64.map"} ${"/out:" + output + "/BOOTX64.EFI"} ${objects}`.cwd(
   root,
 )
-await $`${python} unlock/verify_pe.py ${output + "/BOOTX64.EFI"} ${output + "/BOOTX64.map"} --output ${output + "/pe-verification.json"}`.cwd(
+await $`${process.execPath} tools/verify_pe.ts ${output + "/BOOTX64.EFI"} ${output + "/BOOTX64.map"} --output ${output + "/pe-verification.json"}`.cwd(
   root,
 )
 const map = await Bun.file(resolve(root, output, "BOOTX64.map")).text()

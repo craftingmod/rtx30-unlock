@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto"
 import { readdir } from "node:fs/promises"
 import { relative, resolve } from "node:path"
-import { clang, lldLink, python, requireTool, root, run } from "./test_support"
+import { clang, lldLink, requireTool, root, run } from "./test_support"
 
 const compiler = requireTool(clang, "clang")
 const linker = requireTool(lldLink, "lld-link")
-const python3 = requireTool(python, "Python 3.9+")
 const output = "build/gop-experiment"
 const sources = [
   "src/gop/app",
@@ -75,8 +74,8 @@ await run([
   ...objects,
 ])
 await run([
-  python3,
-  "unlock/verify_pe.py",
+  process.execPath,
+  "tools/verify_pe.ts",
   `${output}/BOOTX64.EFI`,
   `${output}/BOOTX64.map`,
   "--output",
@@ -99,9 +98,6 @@ const records = [
   "src/gop/test_patch_state.c",
   "src/gop/test_cycle.c",
   "src/gop/test_io.c",
-  "experiments/gop/README.md",
-  "scripts/build-gop-experiment.ps1",
-  "scripts/toolchain.ps1",
   "tools/build-gop-experiment.ts",
   "tools/build-probe.ts",
   "tools/build.ts",
@@ -109,7 +105,7 @@ const records = [
   "tools/test_support.ts",
   "src/unlock/format.h",
   "src/unlock/runtime.h",
-  "unlock/verify_pe.py",
+  "tools/verify_pe.ts",
   "src/unlock/boot_source.h",
   "src/gop/cycle.c",
   "src/gop/tree.c",

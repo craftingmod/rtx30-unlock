@@ -1,9 +1,8 @@
 import { resolve } from "node:path"
-import { clang, lldLink, python, requireTool, root, run } from "./test_support"
+import { clang, lldLink, requireTool, root, run } from "./test_support"
 
 const compiler = requireTool(clang, "clang")
 const linker = requireTool(lldLink, "lld-link")
-const python3 = requireTool(python, "Python 3.9+")
 const output = "build/probe"
 const sources = [
   "src/probe/probe_app",
@@ -56,8 +55,8 @@ await run([
   ...objects,
 ])
 await run([
-  python3,
-  "unlock/verify_pe.py",
+  process.execPath,
+  "tools/verify_pe.ts",
   `${output}/BOOTX64.EFI`,
   `${output}/BOOTX64.map`,
   "--output",

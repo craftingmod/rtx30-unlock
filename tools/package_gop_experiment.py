@@ -10,7 +10,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'unlock'))
-from verify_pe import inspect
+from pe_verification import verify_pe
 
 
 def package(output, root=ROOT, assets=None, profile=None):
@@ -19,7 +19,7 @@ def package(output, root=ROOT, assets=None, profile=None):
     if output.exists() or output.is_symlink() or not output.parent.is_dir():
         raise ValueError('Choose a new output folder in an existing parent')
     build = root / 'build/gop-experiment'
-    verified = inspect(build / 'BOOTX64.EFI', build / 'BOOTX64.map')
+    verified = verify_pe(build / 'BOOTX64.EFI', build / 'BOOTX64.map', root)
     recorded = json.loads((build / 'pe-verification.json').read_text(encoding='utf-8'))
     manifest = json.loads((build / 'build-manifest.json').read_text(encoding='utf-8-sig'))
     if verified != recorded or verified['sha256'].upper() != manifest['EfiSha256'].upper():
@@ -129,7 +129,7 @@ def package(output, root=ROOT, assets=None, profile=None):
                 license_path = Path(assets) / 'NVIDIA-LICENSE'
                 if license_path.is_file():
                     shutil.copyfile(license_path, asset_target / 'NVIDIA-LICENSE')
-        if inspect(boot / 'BOOTX64.EFI', build / 'BOOTX64.map') != verified:
+        if verify_pe(boot / 'BOOTX64.EFI', build / 'BOOTX64.map', root) != verified:
             raise ValueError('EFI changed during packaging; rebuild first')
         for entry in sources:
             name = entry['Path']

@@ -8,13 +8,13 @@
 bun run test
 ```
 
-Bun, Python 3.9+, Clang, `lld-link`가 필요합니다. Clang이 `PATH`에 없으면 `LLVM_BIN`으로 LLVM 설치 경로를 지정할 수 있습니다. 기본 검사는 Probe, GOP 실험 EFI, Unlock EFI를 빌드한 뒤 호스트 모의 검사, Python 검사와 패키지 검사를 실행합니다. 실제 GPU와 UEFI 서비스를 사용하지 않습니다.
+Bun, Python 3.9+, Clang, `lld-link`가 필요합니다. Clang이 `PATH`에 없으면 `LLVM_BIN`으로 LLVM 설치 경로를 지정할 수 있습니다. 기본 검사는 Probe, GOP 실험 EFI, Unlock EFI를 빌드한 뒤 C 호스트 모의 검사, 프로필 형식 검사와 Bun PE 검사를 실행합니다. 실제 GPU와 UEFI 서비스를 사용하지 않습니다.
 
 ## 필요한 검사만 실행
 
 ```powershell
 bun tools/test.ts gop       # GOP 모의 검사
-bun tools/test.ts python    # Python 검사
+bun tools/test.ts python    # 프로필 파서와 형식 검사
 bun tools/test.ts gop-cycle # 단일 검사 묶음 예시
 ```
 

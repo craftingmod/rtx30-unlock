@@ -1,7 +1,6 @@
 """Create a verified package folder. Does not select or format a drive."""
 import argparse
 import hashlib
-import importlib.util
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -9,6 +8,8 @@ import shutil
 import sys
 import tempfile
 import zipfile
+
+from pe_verification import verify_pe
 
 
 def digest(path):
@@ -69,10 +70,7 @@ def prepare(root, assets, output):
         name = item['Path'].replace('\\', '/')
         if name not in source_files or digest(source_files[name]) != item['Sha256'].lower():
             raise ValueError('Build source changed; rebuild first: ' + name)
-    spec = importlib.util.spec_from_file_location('usb_pe_verifier', root / 'unlock/verify_pe.py')
-    verifier = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(verifier)
-    verifier.inspect(efi, build / 'BOOTX64.map')
+    verify_pe(efi, build / 'BOOTX64.map', root)
 
     specs = read_json(root / 'unlock/assets.json')
     names = [entry['Name'] for entry in specs]

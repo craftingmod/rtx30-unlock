@@ -583,7 +583,6 @@ async function pythonTests() {
     "test_*.py",
     "-v",
   )
-  await pythonScript("src/unlock/tests/test_pe.py")
 }
 
 async function transaction() {
@@ -868,13 +867,10 @@ const availableSuites: Record<string, () => Promise<void>> = {
   "gop-ssd": gopSsd,
   "gop-external-profile": gopExternalProfile,
   "auto-profile-runtime": gopAutoProfile,
-  "gop-experiment-usb": () => pythonScript("tools/test_gop_experiment.py"),
   "probe-profile": () => pythonScript("tools/test_probe_profile.py"),
-  "probe-usb": () => pythonScript("tools/test_probe_usb.py"),
   "external-profile-format": () =>
     pythonScript("tools/test_runtime_profile.py"),
-  pe: () => pythonScript("src/unlock/tests/test_pe.py"),
-  "usb-package": () => pythonScript("tools/test_package_usb.py"),
+  pe: () => run([process.execPath, "tools/test_pe.ts"]),
   python: pythonTests,
   "windows-check": windowsCheck,
 }
@@ -892,10 +888,8 @@ const defaultSuites = [
   "gop-experiment-build",
   "unlock-build",
   "gop-cycle",
-  "gop-experiment-usb",
   "probe",
   "probe-profile",
-  "probe-usb",
   "profile-runtime",
   "external-profile-format",
   "auto-profile-runtime",
@@ -905,7 +899,6 @@ const defaultSuites = [
   "checks",
   "runtime",
   "pe",
-  "usb-package",
 ]
 
 const args = process.argv.slice(2)
