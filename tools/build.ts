@@ -63,6 +63,7 @@ const flags = [
   "-D__KERNEL__",
   "-DGU_UEFI_PORT",
   "-DGU_RUNTIME_PROFILE_BUILD",
+  ...(process.env.GU_SINGLE_GOP === "1" ? ["-DGU_SINGLE_GOP"] : []),
   "-DGU_AUTO_PROFILE",
   "-DGC_WINDOWS_HANDOFF",
   "-DGC_PRODUCTION",
