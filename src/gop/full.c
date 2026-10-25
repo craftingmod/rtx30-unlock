@@ -11,6 +11,14 @@ static UINTN PatchChecks;
 #include <Protocol/EdidDiscovered.h>
 #include <Protocol/SimpleTextOut.h>
 #include <string.h>
+#ifndef SINGLE_CHILD
+#ifdef GU_SINGLE_GOP
+#define SINGLE_CHILD 1
+#else
+#define SINGLE_CHILD 0
+#endif
+#endif
+
 static EFI_GUID PciGuid = EFI_PCI_IO_PROTOCOL_GUID, PathGuid = EFI_DEVICE_PATH_PROTOCOL_GUID,
                 GopGuid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID,
                 TextGuid = EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL_GUID,
@@ -90,7 +98,7 @@ static EFI_STATUS Children(GC_CONTEXT *c, EFI_HANDLE agent, EFI_HANDLE *a, EFI_H
     s = Free(c, entries, s);
     if (EFI_ERROR(s)) return s;
   }
-  return *a && *b ? EFI_SUCCESS : EFI_UNSUPPORTED;
+  return *a && (*b || SINGLE_CHILD) ? EFI_SUCCESS : EFI_UNSUPPORTED;
 }
 #ifdef GC_FULL_UNLOCK
 /* Observe bounded snapshots without accepting any extra child or owner. */
@@ -349,6 +357,11 @@ EFI_STATUS GfPrepare(GC_CONTEXT *c, GF_PLAN *p) {
   if (EFI_ERROR(s)) return s;
   if (a != p->leaf.physical && b != p->leaf.physical) return EFI_UNSUPPORTED;
   p->sibling = a == p->leaf.physical ? b : a;
+#ifdef GU_SINGLE_GOP
+  /* One vendor child only: use it as its own sibling so the ownership table
+     stays complete. The duplicate stops and starts are skipped below. */
+  if (!p->sibling) p->sibling = p->leaf.physical;
+#endif
   if (p->sibling == p->leaf.text || p->sibling == p->leaf.shared) return EFI_UNSUPPORTED;
   agents[4] = Owner(&p->leaf.guard, p->leaf.physical, &EdidGuid);
   agents[5] = Owner(&p->leaf.guard, p->sibling, &EdidGuid);
@@ -542,10 +555,12 @@ EFI_STATUS GfRun(GC_CONTEXT *c, const GF_PLAN *p, GC_RESULT *r) {
   if (EFI_ERROR(s)) goto finish;
   s = StopAll(c, p, 4, p->leaf.physical, 0, NULL);
   if (EFI_ERROR(s)) goto finish;
-  s = StopAll(c, p, 5, p->sibling, 0, NULL);
-  if (EFI_ERROR(s)) goto finish;
+  if (!SINGLE_CHILD) {
+    s = StopAll(c, p, 5, p->sibling, 0, NULL);
+    if (EFI_ERROR(s)) goto finish;
+  }
   EFI_HANDLE children[] = {p->leaf.physical, p->sibling};
-  s = StopAll(c, p, 0, c->target, 2, children);
+  s = StopAll(c, p, 0, c->target, SINGLE_CHILD ? 1 : 2, children);
   r->detach = s;
   if (EFI_ERROR(s)) goto finish;
   UINTN owners = 0, edges = 0;
@@ -590,6 +605,12 @@ EFI_STATUS GfRun(GC_CONTEXT *c, const GF_PLAN *p, GC_RESULT *r) {
   /* Never hand GOP a device whose DMA cleanup or transaction failed. */
   if (EFI_ERROR(s) || !GxSafe()) {
     if (!EFI_ERROR(s)) s = EFI_DEVICE_ERROR;
+    goto finish;
+  }
+  if (SINGLE_CHILD) {
+    c->log("SINGLE_GOP: transaction done; skipping firmware GOP restore\n");
+    r->verify = EFI_SUCCESS;
+    r->restored = TRUE;
     goto finish;
   }
   s = GxObserve(c, "before-gop");
