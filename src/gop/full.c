@@ -90,7 +90,8 @@ static EFI_STATUS Children(GC_CONTEXT *c, EFI_HANDLE agent, EFI_HANDLE *a, EFI_H
     s = Free(c, entries, s);
     if (EFI_ERROR(s)) return s;
   }
-  return *a && *b ? EFI_SUCCESS : EFI_UNSUPPORTED;
+  /* Single-output support: one vendor child is accepted; the caller leaves sibling NULL. */
+  return *a ? EFI_SUCCESS : EFI_UNSUPPORTED;
 }
 #ifdef GC_FULL_UNLOCK
 /* Observe bounded snapshots without accepting any extra child or owner. */
@@ -258,7 +259,8 @@ static EFI_STATUS Detached(GC_CONTEXT *c, const GF_PLAN *p) {
   const char *roles[] = {"physical_gop", "intermediate_gop", "intermediate_text", "sibling_edid"};
   EFI_STATUS result = EFI_SUCCESS;
   BOOLEAN virtual_old = FALSE, virtual_seen = FALSE;
-  for (UINTN i = 0; i < 4; i++) {
+  UINTN members = p->sibling ? 4 : 3;
+  for (UINTN i = 0; i < members; i++) {
     VOID *interface = NULL;
     EFI_STATUS s = c->table->BootServices->HandleProtocol(old[i], guids[i], &interface);
     BOOLEAN rejected =
@@ -349,9 +351,13 @@ EFI_STATUS GfPrepare(GC_CONTEXT *c, GF_PLAN *p) {
   if (EFI_ERROR(s)) return s;
   if (a != p->leaf.physical && b != p->leaf.physical) return EFI_UNSUPPORTED;
   p->sibling = a == p->leaf.physical ? b : a;
-  if (p->sibling == p->leaf.text || p->sibling == p->leaf.shared) return EFI_UNSUPPORTED;
+  if (p->sibling && (p->sibling == p->leaf.text || p->sibling == p->leaf.shared))
+    return EFI_UNSUPPORTED;
   agents[4] = Owner(&p->leaf.guard, p->leaf.physical, &EdidGuid);
-  agents[5] = Owner(&p->leaf.guard, p->sibling, &EdidGuid);
+  agents[5] = p->sibling ? Owner(&p->leaf.guard, p->sibling, &EdidGuid) : agents[4];
+  if (!c->log("FULL_TOPOLOGY children=%u sibling=%#llx\n", p->sibling ? 2U : 1U,
+              (unsigned long long)(UINTN)p->sibling))
+    return EFI_DEVICE_ERROR;
   for (UINTN i = 0; i < 6; i++) {
     if (!agents[i] || agents[i] == c->image) return EFI_UNSUPPORTED;
     for (UINTN j = 0; j < i; j++)
@@ -364,7 +370,7 @@ EFI_STATUS GfPrepare(GC_CONTEXT *c, GF_PLAN *p) {
                 (unsigned long long)(UINTN)p->drivers[i].driver.image, i >= 4))
       return EFI_DEVICE_ERROR;
   }
-  /* Only the observed two-output EDID/GOP topology is authorized for this experiment. */
+  /* Only the observed EDID/GOP topology is authorized for this experiment (1 or 2 outputs). */
   for (UINTN i = 0; i < p->leaf.guard.count; i++) {
     const GL_RECORD *r = &p->leaf.guard.records[i];
     BOOLEAN valid = FALSE;
@@ -392,8 +398,9 @@ EFI_STATUS GfPrepare(GC_CONTEXT *c, GF_PLAN *p) {
   }
   s = GcLeafGuard(c, &p->leaf, &p->shared, TRUE);
   if (EFI_ERROR(s)) return s;
-  return c->log("FULL_READY: two vendor children; all six roles verified; one FLR after full "
-                "isolation\n")
+  return c->log("FULL_READY: %u vendor children; six roles verified; one FLR after full "
+                "isolation\n",
+                p->sibling ? 2U : 1U)
              ? EFI_SUCCESS
              : EFI_DEVICE_ERROR;
 }
@@ -542,10 +549,12 @@ EFI_STATUS GfRun(GC_CONTEXT *c, const GF_PLAN *p, GC_RESULT *r) {
   if (EFI_ERROR(s)) goto finish;
   s = StopAll(c, p, 4, p->leaf.physical, 0, NULL);
   if (EFI_ERROR(s)) goto finish;
-  s = StopAll(c, p, 5, p->sibling, 0, NULL);
-  if (EFI_ERROR(s)) goto finish;
+  if (p->sibling) {
+    s = StopAll(c, p, 5, p->sibling, 0, NULL);
+    if (EFI_ERROR(s)) goto finish;
+  }
   EFI_HANDLE children[] = {p->leaf.physical, p->sibling};
-  s = StopAll(c, p, 0, c->target, 2, children);
+  s = StopAll(c, p, 0, c->target, p->sibling ? 2 : 1, children);
   r->detach = s;
   if (EFI_ERROR(s)) goto finish;
   UINTN owners = 0, edges = 0;
@@ -647,6 +656,10 @@ EFI_STATUS GfRun(GC_CONTEXT *c, const GF_PLAN *p, GC_RESULT *r) {
     physical = a;
     sibling = b;
   } else {
+    if (!b) {
+      s = EFI_NOT_FOUND;
+      goto finish;
+    }
     s = bs->HandleProtocol(b, &GopGuid, (VOID **)&gop);
 #ifdef GC_FULL_UNLOCK
     if (!c->log("FULL_CHILD_GOP candidate=1 handle=%#llx status=%#llx interface=%#llx\n",
@@ -665,8 +678,10 @@ EFI_STATUS GfRun(GC_CONTEXT *c, const GF_PLAN *p, GC_RESULT *r) {
   }
   s = Start(c, p, 4, physical);
   if (EFI_ERROR(s)) goto finish;
-  s = Start(c, p, 5, sibling);
-  if (EFI_ERROR(s)) goto finish;
+  if (sibling) {
+    s = Start(c, p, 5, sibling);
+    if (EFI_ERROR(s)) goto finish;
+  }
   s = Start(c, p, 1, physical);
   if (EFI_ERROR(s)) goto finish;
   EFI_HANDLE bridge = NULL, text = NULL;
