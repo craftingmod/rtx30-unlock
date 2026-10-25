@@ -18,6 +18,22 @@ Only tested on specific setup, other environment isn't tested so USE IT CAUTION!
 * Windows 11 26H2 (26300.9807)
 * NVIDIA driver 615.56
 
+## Additional documentation (this branch)
+
+This branch adds support for machines with a **single display output** and a helper to
+install the EFI application on the **internal disk** instead of a USB stick:
+
+* [docs/single-display-windows.md](docs/single-display-windows.md) — what changed in
+  `src/gop/full.c` (1 or 2 vendor children) and the measured results on a GA104-based
+  RTX 3060 12 GB: +58…+85 % on the FP16→FP32-accumulate GEMM path.
+* [docs/windows-internal-install.md](docs/windows-internal-install.md) — hidden internal
+  ESP-type partition + first UEFI boot entry, fully automatic cold boots
+  (scripts in [tools/windows/](tools/windows/)).
+* [docs/build-without-msvc.md](docs/build-without-msvc.md) — building without
+  Visual Studio / Windows SDK.
+* 中文说明：[docs/zh-CN/README.md](docs/zh-CN/README.md)
+* Verification benchmark: [tools/bench/fp16_gemm_bench.py](tools/bench/fp16_gemm_bench.py)
+
 ## Build
 
 ### Requirements
